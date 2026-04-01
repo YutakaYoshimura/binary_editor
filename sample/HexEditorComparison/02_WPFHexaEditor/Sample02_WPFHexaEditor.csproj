@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Sample02_WPFHexaEditor</AssemblyName>
+    <RootNamespace>HexEditorSample</RootNamespace>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WPFHexaEditor" Version="2.1.7" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\SampleHelper.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\samples\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>samples\%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+</Project>

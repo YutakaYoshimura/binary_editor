@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>HexEditorComparison</AssemblyName>
+    <RootNamespace>HexEditorComparison</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>8.0</LangVersion>
+    <ApplicationIcon />
+    <StartupObject>HexEditorComparison.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WPFHexaEditor: 最も機能が豊富なOSSパッケージ -->
+    <PackageReference Include="WPFHexaEditor" Version="2.1.7" />
+    <!-- Be.Windows.Forms.HexBox: WinForms専用の老舗パッケージ -->
+    <PackageReference Include="Be.Windows.Forms.HexBox" Version="1.6.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="samples\*.bin">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="samples\*.hex">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

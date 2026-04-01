@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Sample01_BeHexBox</AssemblyName>
+    <RootNamespace>HexEditorSample</RootNamespace>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Be.Windows.Forms.HexBox" Version="1.6.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\SampleHelper.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\samples\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>samples\%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+</Project>

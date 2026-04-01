@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Sample04_HexViewWpf</AssemblyName>
+    <RootNamespace>HexEditorSample</RootNamespace>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HexView.Wpf" Version="0.1.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\SampleHelper.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\samples\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>samples\%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+</Project>
