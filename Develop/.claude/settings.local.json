@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/git/binary_editor/**)",
+      "Bash(git -C \"C:/git/binary_editor\" log --oneline -10)",
+      "WebFetch(domain:www.nuget.org)"
+    ]
+  }
+}

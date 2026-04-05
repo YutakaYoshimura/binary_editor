@@ -1,0 +1,7 @@
+C:\git\binary_editor\Develop\HexEditorVerification\bin\Debug\HexEditorVerification.exe
+C:\git\binary_editor\Develop\HexEditorVerification\bin\Debug\HexEditorVerification.pdb
+C:\git\binary_editor\Develop\HexEditorVerification\bin\Debug\Be.Windows.Forms.HexBox.dll
+C:\git\binary_editor\Develop\HexEditorVerification\obj\Debug\HexEditorVerification.csproj.CoreCompileInputs.cache
+C:\git\binary_editor\Develop\HexEditorVerification\obj\Debug\HexEditorVerification.csproj.CopyComplete
+C:\git\binary_editor\Develop\HexEditorVerification\obj\Debug\HexEditorVerification.exe
+C:\git\binary_editor\Develop\HexEditorVerification\obj\Debug\HexEditorVerification.pdb
