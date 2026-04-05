@@ -1,0 +1,6 @@
+C:\git\binary_editor\Develop\HexEditorStandard\bin\Debug\HexEditorStandard.exe
+C:\git\binary_editor\Develop\HexEditorStandard\bin\Debug\HexEditorStandard.pdb
+C:\git\binary_editor\Develop\HexEditorStandard\obj\Debug\HexEditorStandard.csproj.AssemblyReference.cache
+C:\git\binary_editor\Develop\HexEditorStandard\obj\Debug\HexEditorStandard.csproj.CoreCompileInputs.cache
+C:\git\binary_editor\Develop\HexEditorStandard\obj\Debug\HexEditorStandard.exe
+C:\git\binary_editor\Develop\HexEditorStandard\obj\Debug\HexEditorStandard.pdb
