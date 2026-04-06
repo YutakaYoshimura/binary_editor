@@ -39,8 +39,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DataGridViewHexTextColumn.cs" />
-    <Compile Include="HexEditorPanel.cs" />
+    <Compile Include="DataGridViewHexTextColumn.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="UndoManager.cs" />
+    <Compile Include="HexEditorPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="HexEditorStandardForm.cs">
       <SubType>Form</SubType>
     </Compile>

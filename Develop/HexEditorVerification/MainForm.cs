@@ -28,6 +28,9 @@ namespace HexEditorVerification
         private ToolStripStatusLabel _statusLabel;
         private bool                 _suppressGridEvents;
         private TabControl           _tabs;
+        private UndoManager          _undoMgr = new UndoManager();
+        private ToolStripMenuItem    _undoMenuItem;
+        private ToolStripMenuItem    _redoMenuItem;
 
         // DataGridView 列インデックス (Tab②)
         private const int COL_NAME     = 0;
@@ -89,6 +92,18 @@ namespace HexEditorVerification
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add(new ToolStripMenuItem("サンプルデータに戻す(&R)", null, (s, e) => ResetToSample()));
             menu.Items.Add(fileMenu);
+
+            var editMenu = new ToolStripMenuItem("編集(&E)");
+            _undoMenuItem = new ToolStripMenuItem("元に戻す(&Z)", null, (s, e) => PerformUndo());
+            _redoMenuItem = new ToolStripMenuItem("やり直す(&Y)", null, (s, e) => PerformRedo());
+            _undoMenuItem.ShortcutKeys = Keys.Control | Keys.Z;
+            _redoMenuItem.ShortcutKeys = Keys.Control | Keys.Y;
+            _undoMenuItem.Enabled      = false;
+            _redoMenuItem.Enabled      = false;
+            editMenu.DropDownItems.Add(_undoMenuItem);
+            editMenu.DropDownItems.Add(_redoMenuItem);
+            menu.Items.Add(editMenu);
+
             MainMenuStrip = menu;
             Controls.Add(menu);
 
@@ -406,13 +421,78 @@ namespace HexEditorVerification
             if (e.RowIndex < 0 || e.RowIndex >= SampleData.Parameters.Length) return;
             if (e.ColumnIndex != COL_HEX_BYTES) return;
 
-            ParameterDef p     = SampleData.Parameters[e.RowIndex];
-            byte[]       bytes = _hexBoxGrid.Rows[e.RowIndex].Cells[COL_HEX_BYTES].Value as byte[];
-            if (bytes == null || bytes.Length != p.Size) return;
+            ParameterDef p        = SampleData.Parameters[e.RowIndex];
+            byte[]       newBytes = _hexBoxGrid.Rows[e.RowIndex].Cells[COL_HEX_BYTES].Value as byte[];
+            if (newBytes == null || newBytes.Length != p.Size) return;
 
-            Array.Copy(bytes, 0, _data, p.Offset, p.Size);
+            // 書き戻し前の値を保存
+            byte[] oldBytes = new byte[p.Size];
+            Array.Copy(_data, p.Offset, oldBytes, 0, p.Size);
+
+            Array.Copy(newBytes, 0, _data, p.Offset, p.Size);
+
+            bool changed = false;
+            for (int i = 0; i < p.Size; i++)
+                if (oldBytes[i] != newBytes[i]) { changed = true; break; }
+
+            if (changed)
+            {
+                _undoMgr.Push(new ByteRangeCommand(p.Offset, oldBytes, newBytes,
+                    string.Format("{0} を編集", p.Name)));
+                UpdateUndoRedoMenu();
+            }
+
             _statusLabel.Text = string.Format(
                 "{0} を更新しました  →  {1}", p.Name, p.ReadRawBytes(_data));
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.Z)) { PerformUndo(); return true; }
+            if (keyData == (Keys.Control | Keys.Y)) { PerformRedo(); return true; }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void PerformUndo()
+        {
+            if (!_undoMgr.CanUndo) return;
+            string desc = _undoMgr.UndoDescription;
+            _undoMgr.Undo(_data);
+            RefreshCurrentTab();
+            UpdateUndoRedoMenu();
+            _statusLabel.Text = string.Format("元に戻しました: {0}", desc);
+        }
+
+        private void PerformRedo()
+        {
+            if (!_undoMgr.CanRedo) return;
+            string desc = _undoMgr.RedoDescription;
+            _undoMgr.Redo(_data);
+            RefreshCurrentTab();
+            UpdateUndoRedoMenu();
+            _statusLabel.Text = string.Format("やり直しました: {0}", desc);
+        }
+
+        private void RefreshCurrentTab()
+        {
+            switch (_tabs.SelectedIndex)
+            {
+                case 0: RefreshHex();        break;
+                case 1: RefreshGrid();       break;
+                case 2: BuildHexGridRows();  break;
+            }
+        }
+
+        private void UpdateUndoRedoMenu()
+        {
+            _undoMenuItem.Enabled = _undoMgr.CanUndo;
+            _redoMenuItem.Enabled = _undoMgr.CanRedo;
+            _undoMenuItem.Text = _undoMgr.CanUndo
+                ? string.Format("元に戻す: {0} (&Z)", _undoMgr.UndoDescription)
+                : "元に戻す (&Z)";
+            _redoMenuItem.Text = _undoMgr.CanRedo
+                ? string.Format("やり直す: {0} (&Y)", _undoMgr.RedoDescription)
+                : "やり直す (&Y)";
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -48,6 +48,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="SampleData.cs" />
+    <Compile Include="UndoManager.cs" />
   </ItemGroup>
   <!-- NuGet パッケージ (PackageReference 形式 / VS2019 NuGet 5+ 対応) -->
   <ItemGroup>

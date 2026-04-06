@@ -30,6 +30,7 @@ namespace HexEditorStandard
             Font            = new Font("Consolas", 10f);
             CharacterCasing = CharacterCasing.Upper;
             BorderStyle     = BorderStyle.None;
+            Multiline       = false;   // 複数行入力を禁止
             TextChanged    += (s, e) =>
             {
                 _valueChanged = true;
@@ -91,7 +92,8 @@ namespace HexEditorStandard
                     return true;   // TextBox 内で処理
                 case Keys.Up:
                 case Keys.Down:
-                    return false;  // DataGridView で行移動
+                case Keys.Enter:   // Enter は DataGridView に渡して編集確定
+                    return false;
                 default:
                     return !dataGridViewWantsInputKey;
             }

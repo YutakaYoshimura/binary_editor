@@ -22,6 +22,9 @@ namespace HexEditorStandard
         private ToolStripStatusLabel _statusLabel;
         private bool                 _suppressGridEvents;
         private TabControl           _tabs;
+        private UndoManager          _undoMgr = new UndoManager();
+        private ToolStripMenuItem    _undoMenuItem;
+        private ToolStripMenuItem    _redoMenuItem;
 
         // Tab② 列インデックス
         private const int COL_NAME     = 0;
@@ -81,6 +84,18 @@ namespace HexEditorStandard
             fileMenu.DropDownItems.Add(new ToolStripSeparator());
             fileMenu.DropDownItems.Add(new ToolStripMenuItem("サンプルデータに戻す(&R)", null, (s, e) => ResetToSample()));
             menu.Items.Add(fileMenu);
+
+            var editMenu = new ToolStripMenuItem("編集(&E)");
+            _undoMenuItem = new ToolStripMenuItem("元に戻す(&Z)", null, (s, e) => PerformUndo());
+            _redoMenuItem = new ToolStripMenuItem("やり直す(&Y)", null, (s, e) => PerformRedo());
+            _undoMenuItem.ShortcutKeys = Keys.Control | Keys.Z;
+            _redoMenuItem.ShortcutKeys = Keys.Control | Keys.Y;
+            _undoMenuItem.Enabled      = false;
+            _redoMenuItem.Enabled      = false;
+            editMenu.DropDownItems.Add(_undoMenuItem);
+            editMenu.DropDownItems.Add(_redoMenuItem);
+            menu.Items.Add(editMenu);
+
             MainMenuStrip = menu;
             Controls.Add(menu);
 
@@ -130,8 +145,19 @@ namespace HexEditorStandard
             };
             _hexPanel.Changed += (s, e) =>
             {
-                // HexEditorPanel は _data の配列を直接編集するため同期は自動的
                 _statusLabel.Text = "バイナリデータを編集しました";
+            };
+
+            // バイト確定時に Undo コマンドを記録する
+            _hexPanel.ByteEdited += (s, e) =>
+            {
+                _undoMgr.Push(new ByteRangeCommand(
+                    e.Index,
+                    new byte[] { e.OldValue },
+                    new byte[] { e.NewValue },
+                    string.Format("オフセット 0x{0:X4} を {1:X2} → {2:X2} に変更",
+                        e.Index, e.OldValue, e.NewValue)));
+                UpdateUndoRedoMenu();
             };
 
             tab.Controls.Add(_hexPanel);
@@ -238,6 +264,10 @@ namespace HexEditorStandard
                 DataGridViewCell   cell  = gv.Rows[e.RowIndex].Cells[COL_VALUE];
                 string             val   = cell.Value != null ? cell.Value.ToString() : string.Empty;
 
+                // 編集前の値を保存
+                byte[] oldBytes = new byte[param.Size];
+                Array.Copy(_data, param.Offset, oldBytes, 0, param.Size);
+
                 if (!param.WriteValue(_data, val))
                 {
                     MessageBox.Show(
@@ -247,6 +277,12 @@ namespace HexEditorStandard
                 }
                 else
                 {
+                    byte[] newBytes = new byte[param.Size];
+                    Array.Copy(_data, param.Offset, newBytes, 0, param.Size);
+                    _undoMgr.Push(new ByteRangeCommand(param.Offset, oldBytes, newBytes,
+                        string.Format("{0} を編集", param.Name)));
+                    UpdateUndoRedoMenu();
+
                     gv.Rows[e.RowIndex].Cells[COL_RAWBYTES].Value = param.ReadRawBytes(_data);
                     _statusLabel.Text = string.Format("{0} を更新しました → {1}",
                         param.Name, param.ReadRawBytes(_data));
@@ -348,17 +384,33 @@ namespace HexEditorStandard
                 e.CellStyle.ForeColor = p.IsReadOnly ? Color.FromArgb(130, 130, 130) : Color.FromArgb(20, 20, 20);
             };
 
-            // 値確定 → _data に書き戻す
+            // 値確定 → Undo 記録 → _data に書き戻す
             gv.CellValueChanged += (s, e) =>
             {
                 if (e.RowIndex < 0 || e.RowIndex >= SampleData.Parameters.Length) return;
                 if (e.ColumnIndex != COL_HEX_BYTES) return;
 
-                ParameterDef p     = SampleData.Parameters[e.RowIndex];
-                byte[]       bytes = gv.Rows[e.RowIndex].Cells[COL_HEX_BYTES].Value as byte[];
-                if (bytes == null || bytes.Length != p.Size) return;
+                ParameterDef p        = SampleData.Parameters[e.RowIndex];
+                byte[]       newBytes = gv.Rows[e.RowIndex].Cells[COL_HEX_BYTES].Value as byte[];
+                if (newBytes == null || newBytes.Length != p.Size) return;
 
-                Array.Copy(bytes, 0, _data, p.Offset, p.Size);
+                // 書き戻し前の値を保存
+                byte[] oldBytes = new byte[p.Size];
+                Array.Copy(_data, p.Offset, oldBytes, 0, p.Size);
+
+                Array.Copy(newBytes, 0, _data, p.Offset, p.Size);
+
+                bool changed = false;
+                for (int i = 0; i < p.Size; i++)
+                    if (oldBytes[i] != newBytes[i]) { changed = true; break; }
+
+                if (changed)
+                {
+                    _undoMgr.Push(new ByteRangeCommand(p.Offset, oldBytes, newBytes,
+                        string.Format("{0} を編集", p.Name)));
+                    UpdateUndoRedoMenu();
+                }
+
                 _statusLabel.Text = string.Format("{0} を更新しました → {1}",
                     p.Name, p.ReadRawBytes(_data));
             };
@@ -464,6 +516,8 @@ namespace HexEditorStandard
             {
                 if (dlg.ShowDialog() != DialogResult.OK) return;
                 _data = File.ReadAllBytes(dlg.FileName);
+                _undoMgr.Clear();
+                UpdateUndoRedoMenu();
                 RefreshHex();
                 RefreshGrid();
                 BuildHexTextGridRows();
@@ -486,10 +540,65 @@ namespace HexEditorStandard
         private void ResetToSample()
         {
             _data = SampleData.Create();
+            _undoMgr.Clear();
+            UpdateUndoRedoMenu();
             RefreshHex();
             RefreshGrid();
             BuildHexTextGridRows();
             _statusLabel.Text = "サンプルデータにリセットしました";
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  Undo / Redo
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.Z)) { PerformUndo(); return true; }
+            if (keyData == (Keys.Control | Keys.Y)) { PerformRedo(); return true; }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private void PerformUndo()
+        {
+            if (!_undoMgr.CanUndo) return;
+            string desc = _undoMgr.UndoDescription;
+            _undoMgr.Undo(_data);
+            RefreshCurrentTab();
+            UpdateUndoRedoMenu();
+            _statusLabel.Text = string.Format("元に戻しました: {0}", desc);
+        }
+
+        private void PerformRedo()
+        {
+            if (!_undoMgr.CanRedo) return;
+            string desc = _undoMgr.RedoDescription;
+            _undoMgr.Redo(_data);
+            RefreshCurrentTab();
+            UpdateUndoRedoMenu();
+            _statusLabel.Text = string.Format("やり直しました: {0}", desc);
+        }
+
+        private void RefreshCurrentTab()
+        {
+            switch (_tabs.SelectedIndex)
+            {
+                case 0: RefreshHex();           break;
+                case 1: RefreshGrid();          break;
+                case 2: BuildHexTextGridRows(); break;
+            }
+        }
+
+        private void UpdateUndoRedoMenu()
+        {
+            _undoMenuItem.Enabled = _undoMgr.CanUndo;
+            _redoMenuItem.Enabled = _undoMgr.CanRedo;
+            _undoMenuItem.Text = _undoMgr.CanUndo
+                ? string.Format("元に戻す: {0} (&Z)", _undoMgr.UndoDescription)
+                : "元に戻す (&Z)";
+            _redoMenuItem.Text = _undoMgr.CanRedo
+                ? string.Format("やり直す: {0} (&Y)", _undoMgr.RedoDescription)
+                : "やり直す (&Y)";
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

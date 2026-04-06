@@ -29,11 +29,12 @@ namespace HexEditorStandard
         private static readonly Color C_SEP     = Color.LightSteelBlue;
 
         // ── 状態 ───────────────────────────────────────────────────
-        private byte[]     _data    = new byte[0];
-        private bool       _ro      = false;
-        private int        _selIdx  = -1;   // 選択中バイトのインデックス
-        private bool       _hiNib   = true; // true = 上位ニブル編集中
-        private int        _topLine = 0;    // スクロール先頭行
+        private byte[]     _data         = new byte[0];
+        private bool       _ro           = false;
+        private int        _selIdx       = -1;   // 選択中バイトのインデックス
+        private bool       _hiNib        = true; // true = 上位ニブル編集中
+        private int        _topLine      = 0;    // スクロール先頭行
+        private byte       _editStartByte;       // 編集開始前のバイト値（Undo 用）
 
         // ── レイアウト (フォント計測後に確定) ──────────────────────
         private readonly Font _font;
@@ -46,6 +47,10 @@ namespace HexEditorStandard
         private readonly VScrollBar _scroll;
 
         // ── イベント ───────────────────────────────────────────────
+        /// <summary>バイト値が変化したとき発火（Undo 記録用）</summary>
+        public event EventHandler<ByteEditedEventArgs> ByteEdited;
+
+        /// <summary>何らかの変更があったとき発火（ステータス更新用）</summary>
         public event EventHandler Changed;
 
         // ────────────────────────────────────────────────────────────
@@ -328,6 +333,7 @@ namespace HexEditorStandard
 
             if (_hiNib)
             {
+                _editStartByte = _data[_selIdx]; // 上位ニブル編集開始時に元の値を保存
                 _data[_selIdx] = (byte)((nibble << 4) | (_data[_selIdx] & 0x0F));
                 _hiNib = false;
             }
@@ -335,6 +341,10 @@ namespace HexEditorStandard
             {
                 _data[_selIdx] = (byte)((_data[_selIdx] & 0xF0) | nibble);
                 _hiNib = true;
+                // 下位ニブル確定 = 1 バイト完全編集 → Undo 用イベントを発火
+                if (_data[_selIdx] != _editStartByte)
+                    ByteEdited?.Invoke(this,
+                        new ByteEditedEventArgs(_selIdx, _editStartByte, _data[_selIdx]));
                 if (_selIdx < _data.Length - 1)
                 {
                     _selIdx++;
@@ -372,6 +382,23 @@ namespace HexEditorStandard
             if (_scroll.Visible)
                 _scroll.Value = Math.Min(_topLine, _scroll.Maximum);
             Invalidate();
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //  ByteEdited イベント引数
+    // ────────────────────────────────────────────────────────────────
+    internal class ByteEditedEventArgs : EventArgs
+    {
+        public int  Index    { get; private set; }
+        public byte OldValue { get; private set; }
+        public byte NewValue { get; private set; }
+
+        public ByteEditedEventArgs(int index, byte oldValue, byte newValue)
+        {
+            Index    = index;
+            OldValue = oldValue;
+            NewValue = newValue;
         }
     }
 }

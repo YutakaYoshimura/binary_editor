@@ -7,6 +7,43 @@ using Be.Windows.Forms;
 
 namespace HexEditorVerification
 {
+    // ────────────────────────────────────────────────────────────────
+    //  固定長バイトプロバイダ
+    //  SupportsInsertBytes / SupportsDeleteBytes を false にすることで
+    //  HexBox のバイト挿入・削除操作を根本から無効化する。
+    // ────────────────────────────────────────────────────────────────
+    internal class FixedByteProvider : IByteProvider
+    {
+        private readonly byte[] _data;
+        public event EventHandler Changed;
+        public event EventHandler LengthChanged;
+
+        public FixedByteProvider(byte[] data)
+        {
+            _data = (byte[])data.Clone();
+        }
+
+        public long Length { get { return _data.Length; } }
+
+        public byte ReadByte(long index) { return _data[index]; }
+
+        public void WriteByte(long index, byte value)
+        {
+            _data[index] = value;
+            if (Changed != null) Changed(this, EventArgs.Empty);
+        }
+
+        // 挿入・削除は一切受け付けない
+        public void InsertBytes(long index, byte[] bs) { }
+        public void DeleteBytes(long index, long length) { }
+        public bool SupportsWriteByte()    { return true; }
+        public bool SupportsInsertBytes()  { return false; }
+        public bool SupportsDeleteBytes()  { return false; }
+        public bool HasChanges()           { return false; }
+        public void ApplyChanges()         { }
+    }
+
+
     // ════════════════════════════════════════════════════════════════
     //  DataGridView に HexBox を埋め込むためのカスタムコントロール群
     //
@@ -35,6 +72,8 @@ namespace HexEditorVerification
             ColumnInfoVisible    = false;
             VScrollBarVisible    = false;
             UseFixedBytesPerLine = true;
+            // 上書きモード固定: バイトの挿入・削除を禁止して常に 1 行を維持する
+            InsertActive         = false;
         }
 
         // ── IDataGridViewEditingControl ──────────────────────────
@@ -54,7 +93,7 @@ namespace HexEditorVerification
         {
             get
             {
-                DynamicByteProvider prov = ByteProvider as DynamicByteProvider;
+                IByteProvider prov = ByteProvider;
                 if (prov == null) return new byte[0];
                 byte[] bytes = new byte[prov.Length];
                 for (long i = 0; i < prov.Length; i++)
@@ -66,8 +105,8 @@ namespace HexEditorVerification
                 byte[] bytes = value as byte[];
                 if (bytes == null) bytes = new byte[0];
 
-                DynamicByteProvider prov = new DynamicByteProvider(bytes);
-                // HexBox でバイトが変更されるたびに DataGridView へ「値が変わった」と通知する
+                // FixedByteProvider: InsertBytes / DeleteBytes を無効化して 1 行固定を保証する
+                FixedByteProvider prov = new FixedByteProvider(bytes);
                 prov.Changed += (s, e) =>
                 {
                     _valueChanged = true;
@@ -141,6 +180,49 @@ namespace HexEditorVerification
         }
 
         public void PrepareEditingControlForEdit(bool selectAll) { }
+
+        /// <summary>
+        /// Ctrl+V をインターセプトしてクリップボードのテキストを hex 文字列として解釈する。
+        /// 例: "1234" → 0x12, 0x34 として書き込む。
+        /// バイト数が一致しない / 無効な文字が含まれる場合は貼り付けを無視する。
+        /// </summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.V))
+            {
+                string text = Clipboard.GetText();
+                if (!string.IsNullOrEmpty(text))
+                {
+                    string hex = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
+                    IByteProvider prov = ByteProvider;
+                    if (prov != null && hex.Length == prov.Length * 2)
+                    {
+                        byte[] bytes = new byte[prov.Length];
+                        bool valid = true;
+                        for (int i = 0; i < bytes.Length; i++)
+                        {
+                            if (!byte.TryParse(
+                                    hex.Substring(i * 2, 2),
+                                    System.Globalization.NumberStyles.HexNumber,
+                                    System.Globalization.CultureInfo.InvariantCulture,
+                                    out bytes[i]))
+                            {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        if (valid)
+                        {
+                            for (long i = 0; i < prov.Length; i++)
+                                prov.WriteByte(i, bytes[i]);
+                            Invalidate();
+                        }
+                    }
+                }
+                return true; // HexBox 既定の貼り付け（ASCII バイト化）を抑止
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -193,15 +275,20 @@ namespace HexEditorVerification
             byte[] bytes = Value as byte[];
             if (bytes == null) bytes = new byte[0];
 
+            ctl.ReadOnly  = this.ReadOnly;
+            ctl.BackColor = this.ReadOnly
+                              ? Color.FromArgb(235, 235, 235)
+                              : Color.FromArgb(255, 255, 225);
+
+            // ByteProvider を先に設定してから BytesPerLine を上書きする。
+            // HexBox は ByteProvider 代入時に BytesPerLine をリセットする場合があるため、
+            // 順序を ByteProvider → BytesPerLine にしないと複数行になる。
+            ctl.EditingControlFormattedValue = bytes;
+
             // BytesPerLine: 全バイトを 1 行に収める
             int bpl = Math.Max(1, bytes.Length);
-            ctl.BytesPerLine             = bpl;
-            ctl.UseFixedBytesPerLine     = true;
-            ctl.ReadOnly                 = this.ReadOnly;
-            ctl.BackColor                = this.ReadOnly
-                                             ? Color.FromArgb(235, 235, 235)
-                                             : Color.FromArgb(255, 255, 225);
-            ctl.EditingControlFormattedValue = bytes;
+            ctl.UseFixedBytesPerLine = true;
+            ctl.BytesPerLine         = bpl;
         }
 
         /// <summary>

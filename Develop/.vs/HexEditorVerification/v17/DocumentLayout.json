@@ -1,12 +1,37 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "C:\\git\\binary_editor\\Develop\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{AAA00001-0000-0000-0000-000000000001}|HexEditorVerification\\HexEditorVerification.csproj|c:\\git\\binary_editor\\develop\\hexeditorverification\\datagridviewhexboxcolumn.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AAA00001-0000-0000-0000-000000000001}|HexEditorVerification\\HexEditorVerification.csproj|solutionrelative:hexeditorverification\\datagridviewhexboxcolumn.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
-      "DocumentGroups": []
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "DataGridViewHexBoxColumn.cs",
+              "DocumentMoniker": "C:\\git\\binary_editor\\Develop\\HexEditorVerification\\DataGridViewHexBoxColumn.cs",
+              "RelativeDocumentMoniker": "HexEditorVerification\\DataGridViewHexBoxColumn.cs",
+              "ToolTip": "C:\\git\\binary_editor\\Develop\\HexEditorVerification\\DataGridViewHexBoxColumn.cs",
+              "RelativeToolTip": "HexEditorVerification\\DataGridViewHexBoxColumn.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-06T22:02:31.205Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
     }
   ]
 }
