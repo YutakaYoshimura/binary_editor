@@ -1,0 +1,7 @@
+C:\git\binary_editor\Develop\HexControlComparison\Proj01_BeHexBox\bin\Debug\Proj01_BeHexBox.exe
+C:\git\binary_editor\Develop\HexControlComparison\Proj01_BeHexBox\bin\Debug\Proj01_BeHexBox.pdb
+C:\git\binary_editor\Develop\HexControlComparison\Proj01_BeHexBox\bin\Debug\Be.Windows.Forms.HexBox.dll
+C:\git\binary_editor\Develop\HexControlComparison\Proj01_BeHexBox\obj\Debug\Proj01_BeHexBox.csproj.CoreCompileInputs.cache
+C:\git\binary_editor\Develop\HexControlComparison\Proj01_BeHexBox\obj\Debug\Proj01_BeHexBox.exe
+C:\git\binary_editor\Develop\HexControlComparison\Proj01_BeHexBox\obj\Debug\Proj01_BeHexBox.pdb
+C:\git\binary_editor\Develop\HexControlComparison\Proj01_BeHexBox\obj\Debug\Proj01_BeHexBox.csproj.CopyComplete

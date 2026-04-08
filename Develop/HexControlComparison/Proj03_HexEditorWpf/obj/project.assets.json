@@ -1,0 +1,205 @@
+{
+  "version": 3,
+  "targets": {
+    ".NETFramework,Version=v4.8": {
+      "HexEditor.Wpf/2.1.8": {
+        "type": "package",
+        "compile": {
+          "lib/net48/WPFHexaEditor.dll": {}
+        },
+        "runtime": {
+          "lib/net48/WPFHexaEditor.dll": {}
+        },
+        "resource": {
+          "lib/net48/fr-CA/WPFHexaEditor.resources.dll": {
+            "locale": "fr-CA"
+          },
+          "lib/net48/pl-PL/WPFHexaEditor.resources.dll": {
+            "locale": "pl-PL"
+          },
+          "lib/net48/pt-BR/WPFHexaEditor.resources.dll": {
+            "locale": "pt-BR"
+          },
+          "lib/net48/ru-RU/WPFHexaEditor.resources.dll": {
+            "locale": "ru-RU"
+          },
+          "lib/net48/zh-CN/WPFHexaEditor.resources.dll": {
+            "locale": "zh-CN"
+          }
+        },
+        "contentFiles": {
+          "contentFiles/any/net48/Resources/EBCDIC-NoSpecialChar.tbl": {
+            "buildAction": "Content",
+            "codeLanguage": "any",
+            "copyToOutput": false
+          },
+          "contentFiles/any/net48/Resources/EBCDIC.tbl": {
+            "buildAction": "Content",
+            "codeLanguage": "any",
+            "copyToOutput": false
+          }
+        }
+      }
+    },
+    ".NETFramework,Version=v4.8/win": {
+      "HexEditor.Wpf/2.1.8": {
+        "type": "package",
+        "compile": {
+          "lib/net48/WPFHexaEditor.dll": {}
+        },
+        "runtime": {
+          "lib/net48/WPFHexaEditor.dll": {}
+        },
+        "resource": {
+          "lib/net48/fr-CA/WPFHexaEditor.resources.dll": {
+            "locale": "fr-CA"
+          },
+          "lib/net48/pl-PL/WPFHexaEditor.resources.dll": {
+            "locale": "pl-PL"
+          },
+          "lib/net48/pt-BR/WPFHexaEditor.resources.dll": {
+            "locale": "pt-BR"
+          },
+          "lib/net48/ru-RU/WPFHexaEditor.resources.dll": {
+            "locale": "ru-RU"
+          },
+          "lib/net48/zh-CN/WPFHexaEditor.resources.dll": {
+            "locale": "zh-CN"
+          }
+        },
+        "contentFiles": {
+          "contentFiles/any/net48/Resources/EBCDIC-NoSpecialChar.tbl": {
+            "buildAction": "Content",
+            "codeLanguage": "any",
+            "copyToOutput": false
+          },
+          "contentFiles/any/net48/Resources/EBCDIC.tbl": {
+            "buildAction": "Content",
+            "codeLanguage": "any",
+            "copyToOutput": false
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "HexEditor.Wpf/2.1.8": {
+      "sha512": "wC7soghtfoZCWlX6wUlvtjsnTN+I3xC0XkACi4wm46B6LgdSzDTKJGcVhkSswwjyPxgTXlc89rugjlN7a6Aabw==",
+      "type": "package",
+      "path": "hexeditor.wpf/2.1.8",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Logo-Icon.png",
+        "README.md",
+        "content/Resources/EBCDIC-NoSpecialChar.tbl",
+        "content/Resources/EBCDIC.tbl",
+        "contentFiles/any/net48/Resources/EBCDIC-NoSpecialChar.tbl",
+        "contentFiles/any/net48/Resources/EBCDIC.tbl",
+        "contentFiles/any/net6.0-windows7.0/Resources/EBCDIC-NoSpecialChar.tbl",
+        "contentFiles/any/net6.0-windows7.0/Resources/EBCDIC.tbl",
+        "contentFiles/any/net7.0-windows7.0/Resources/EBCDIC-NoSpecialChar.tbl",
+        "contentFiles/any/net7.0-windows7.0/Resources/EBCDIC.tbl",
+        "contentFiles/any/net8.0-windows7.0/Resources/EBCDIC-NoSpecialChar.tbl",
+        "contentFiles/any/net8.0-windows7.0/Resources/EBCDIC.tbl",
+        "contentFiles/any/net9.0-windows7.0/Resources/EBCDIC-NoSpecialChar.tbl",
+        "contentFiles/any/net9.0-windows7.0/Resources/EBCDIC.tbl",
+        "hexeditor.wpf.2.1.8.nupkg.sha512",
+        "hexeditor.wpf.nuspec",
+        "lib/net48/WPFHexaEditor.dll",
+        "lib/net48/fr-CA/WPFHexaEditor.resources.dll",
+        "lib/net48/pl-PL/WPFHexaEditor.resources.dll",
+        "lib/net48/pt-BR/WPFHexaEditor.resources.dll",
+        "lib/net48/ru-RU/WPFHexaEditor.resources.dll",
+        "lib/net48/zh-CN/WPFHexaEditor.resources.dll",
+        "lib/net6.0-windows7.0/WPFHexaEditor.dll",
+        "lib/net6.0-windows7.0/fr-CA/WPFHexaEditor.resources.dll",
+        "lib/net6.0-windows7.0/pl-PL/WPFHexaEditor.resources.dll",
+        "lib/net6.0-windows7.0/pt-BR/WPFHexaEditor.resources.dll",
+        "lib/net6.0-windows7.0/ru-RU/WPFHexaEditor.resources.dll",
+        "lib/net6.0-windows7.0/zh-CN/WPFHexaEditor.resources.dll",
+        "lib/net7.0-windows7.0/WPFHexaEditor.dll",
+        "lib/net7.0-windows7.0/fr-CA/WPFHexaEditor.resources.dll",
+        "lib/net7.0-windows7.0/pl-PL/WPFHexaEditor.resources.dll",
+        "lib/net7.0-windows7.0/pt-BR/WPFHexaEditor.resources.dll",
+        "lib/net7.0-windows7.0/ru-RU/WPFHexaEditor.resources.dll",
+        "lib/net7.0-windows7.0/zh-CN/WPFHexaEditor.resources.dll",
+        "lib/net8.0-windows7.0/WPFHexaEditor.dll",
+        "lib/net8.0-windows7.0/fr-CA/WPFHexaEditor.resources.dll",
+        "lib/net8.0-windows7.0/pl-PL/WPFHexaEditor.resources.dll",
+        "lib/net8.0-windows7.0/pt-BR/WPFHexaEditor.resources.dll",
+        "lib/net8.0-windows7.0/ru-RU/WPFHexaEditor.resources.dll",
+        "lib/net8.0-windows7.0/zh-CN/WPFHexaEditor.resources.dll",
+        "lib/net9.0-windows7.0/WPFHexaEditor.dll",
+        "lib/net9.0-windows7.0/fr-CA/WPFHexaEditor.resources.dll",
+        "lib/net9.0-windows7.0/pl-PL/WPFHexaEditor.resources.dll",
+        "lib/net9.0-windows7.0/pt-BR/WPFHexaEditor.resources.dll",
+        "lib/net9.0-windows7.0/ru-RU/WPFHexaEditor.resources.dll",
+        "lib/net9.0-windows7.0/zh-CN/WPFHexaEditor.resources.dll",
+        "license.txt"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    ".NETFramework,Version=v4.8": [
+      "HexEditor.Wpf >= 2.1.8"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\yutak\\.nuget\\packages\\": {},
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\Proj03_HexEditorWpf.csproj",
+      "projectName": "Proj03_HexEditorWpf",
+      "projectPath": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\Proj03_HexEditorWpf.csproj",
+      "packagesPath": "C:\\Users\\yutak\\.nuget\\packages\\",
+      "outputPath": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\obj\\",
+      "projectStyle": "PackageReference",
+      "skipContentFileWrite": true,
+      "UsingMicrosoftNETSdk": false,
+      "fallbackFolders": [
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+      ],
+      "configFilePaths": [
+        "C:\\Users\\yutak\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net48"
+      ],
+      "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net48": {
+          "projectReferences": {}
+        }
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "all"
+      }
+    },
+    "frameworks": {
+      "net48": {
+        "dependencies": {
+          "HexEditor.Wpf": {
+            "target": "Package",
+            "version": "[2.1.8, )"
+          }
+        }
+      }
+    },
+    "runtimes": {
+      "win": {
+        "#import": []
+      }
+    }
+  }
+}

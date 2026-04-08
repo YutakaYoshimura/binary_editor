@@ -1,0 +1,8 @@
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\obj\Debug\Proj04_SpooksoftHexEditor.csproj.AssemblyReference.cache
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\obj\Debug\Proj04_SpooksoftHexEditor.csproj.CoreCompileInputs.cache
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\bin\Debug\Proj04_SpooksoftHexEditor.exe
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\bin\Debug\Proj04_SpooksoftHexEditor.pdb
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\bin\Debug\Spooksoft.HexEditor.dll
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\obj\Debug\Proj04_SpooksoftHexEditor.exe
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\obj\Debug\Proj04_SpooksoftHexEditor.pdb
+C:\git\binary_editor\Develop\HexControlComparison\Proj04_SpooksoftHexEditor\obj\Debug\Proj04_SpooksoftHexEditor.csproj.CopyComplete

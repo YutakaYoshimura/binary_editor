@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj04_SpooksoftHexEditor\\Proj04_SpooksoftHexEditor.csproj": {}
+  },
+  "projects": {
+    "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj04_SpooksoftHexEditor\\Proj04_SpooksoftHexEditor.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj04_SpooksoftHexEditor\\Proj04_SpooksoftHexEditor.csproj",
+        "projectName": "Proj04_SpooksoftHexEditor",
+        "projectPath": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj04_SpooksoftHexEditor\\Proj04_SpooksoftHexEditor.csproj",
+        "packagesPath": "C:\\Users\\yutak\\.nuget\\packages\\",
+        "outputPath": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj04_SpooksoftHexEditor\\obj\\",
+        "projectStyle": "PackageReference",
+        "skipContentFileWrite": true,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\yutak\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "projectReferences": {}
+          }
+        }
+      },
+      "frameworks": {
+        "net48": {
+          "dependencies": {
+            "Spooksoft.HexEditor": {
+              "target": "Package",
+              "version": "[1.0.3, )"
+            }
+          }
+        }
+      },
+      "runtimes": {
+        "win": {
+          "#import": []
+        }
+      }
+    }
+  }
+}

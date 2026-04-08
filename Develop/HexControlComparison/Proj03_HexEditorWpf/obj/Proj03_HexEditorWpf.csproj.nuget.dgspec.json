@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\Proj03_HexEditorWpf.csproj": {}
+  },
+  "projects": {
+    "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\Proj03_HexEditorWpf.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\Proj03_HexEditorWpf.csproj",
+        "projectName": "Proj03_HexEditorWpf",
+        "projectPath": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\Proj03_HexEditorWpf.csproj",
+        "packagesPath": "C:\\Users\\yutak\\.nuget\\packages\\",
+        "outputPath": "C:\\git\\binary_editor\\Develop\\HexControlComparison\\Proj03_HexEditorWpf\\obj\\",
+        "projectStyle": "PackageReference",
+        "skipContentFileWrite": true,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\yutak\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "projectReferences": {}
+          }
+        }
+      },
+      "frameworks": {
+        "net48": {
+          "dependencies": {
+            "HexEditor.Wpf": {
+              "target": "Package",
+              "version": "[2.1.8, )"
+            }
+          }
+        }
+      },
+      "runtimes": {
+        "win": {
+          "#import": []
+        }
+      }
+    }
+  }
+}
