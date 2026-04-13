@@ -213,6 +213,7 @@ namespace EdsStandardBase
             gv.CellBeginEdit         += HexGrid_CellBeginEdit;
             gv.CellEndEdit           += HexGrid_CellEndEdit;
             gv.EditingControlShowing += HexGrid_EditingControlShowing;
+            gv.KeyDown               += HexGrid_DGV_KeyDown;
 
             return gv;
         }
@@ -330,10 +331,12 @@ namespace EdsStandardBase
 
         private void HexGridTB_KeyPress(object sender, KeyPressEventArgs e)
         {
-            if (e.KeyChar == '\x16') // Ctrl+V
+            if (e.KeyChar == '\x16') // Ctrl+V → DGV KeyDown で処理
             {
                 e.Handled = true;
-                PasteToHexCell((TextBox)sender);
+                int col = _hexGrid.CurrentCell != null ? _hexGrid.CurrentCell.ColumnIndex : -1;
+                int row = _hexGrid.CurrentCell != null ? _hexGrid.CurrentCell.RowIndex    : -1;
+                if (col >= 1 && col <= 16 && row >= 0) PasteToHexGrid(row, col);
                 return;
             }
             if (char.IsControl(e.KeyChar)) return;
@@ -356,24 +359,16 @@ namespace EdsStandardBase
             }
         }
 
-        private void PasteToHexCell(TextBox tb)
+        /// <summary>
+        /// 指定セル位置からクリップボードの Hex バイト列を複数セルに跨いで貼り付ける。
+        /// 編集中・非編集中どちらでも動作する。
+        /// </summary>
+        private void PasteToHexGrid(int startRow, int startCol)
         {
             string text = Clipboard.GetText();
             string hex  = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
 
-            if (hex.Length != 2)
-            {
-                MessageBox.Show(
-                    string.Format(
-                        "貼り付けデータのバイト数がセルと一致しません。\n" +
-                        "期待: 1 バイト（2 文字）\n実際: {0} 文字（{1} バイト相当）",
-                        hex.Length, hex.Length / 2),
-                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            byte b;
-            if (!byte.TryParse(hex, System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture, out b))
+            if (hex.Length < 2)
             {
                 MessageBox.Show(
                     "クリップボードのテキストに無効な文字が含まれています。\n16 進数の文字（0-9, A-F）のみ使用できます。",
@@ -381,15 +376,49 @@ namespace EdsStandardBase
                 return;
             }
 
-            tb.Text = hex;
+            int startByteIdx = startRow * 16 + (startCol - 1);
+            int byteCount    = hex.Length / 2;
+            int writeCount   = Math.Min(byteCount, _data.Length - startByteIdx);
+
+            byte[] bytes = new byte[writeCount];
+            bool   valid = true;
+            for (int i = 0; i < writeCount; i++)
+            {
+                if (!byte.TryParse(hex.Substring(i * 2, 2),
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture, out bytes[i]))
+                { valid = false; break; }
+            }
+
+            if (!valid)
+            {
+                MessageBox.Show(
+                    "クリップボードのテキストに無効な文字が含まれています。\n16 進数の文字（0-9, A-F）のみ使用できます。",
+                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int capturedStart = startByteIdx;
+            int capturedCount = writeCount;
+            byte[] capturedBytes = bytes;
+
             _hexGridNibbleCount = 0;
-            int col = _hexGrid.CurrentCell != null ? _hexGrid.CurrentCell.ColumnIndex : -1;
-            int row = _hexGrid.CurrentCell != null ? _hexGrid.CurrentCell.RowIndex    : -1;
+            // BeginInvoke でエディット終了後に全バイトを一括書き込みする
             _hexGrid.BeginInvoke(new Action(() =>
             {
-                _hexGrid.EndEdit();
-                if (col >= 1 && col <= 16 && row >= 0)
-                    MoveToNextByteCell(row, col);
+                if (_hexGrid.IsCurrentCellInEditMode) _hexGrid.CancelEdit();
+
+                var affectedRows = new System.Collections.Generic.HashSet<int>();
+                for (int i = 0; i < capturedCount; i++)
+                {
+                    _data[capturedStart + i] = capturedBytes[i];
+                    int r = (capturedStart + i) / 16;
+                    int c = (capturedStart + i) % 16 + 1;
+                    _hexGrid.Rows[r].Cells[c].Value = capturedBytes[i].ToString("X2");
+                    affectedRows.Add(r);
+                }
+                foreach (int r in affectedRows)
+                    UpdateHexGridAsciiCell(r);
             }));
         }
 
@@ -430,6 +459,45 @@ namespace EdsStandardBase
             _hexGrid.CurrentCell = _hexGrid.Rows[newRow].Cells[newCol];
             _hexGrid.BeginEdit(true);
             _hexGridNibbleCount = 0;
+        }
+
+        /// <summary>
+        /// DataGridView が直接フォーカスを持つとき（非編集状態）の BackSpace / Delete 処理。
+        /// 編集中は HexGridTB_KeyDown が担当するためスキップする。
+        /// </summary>
+        private void HexGrid_DGV_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (_hexGrid.CurrentCell == null) return;
+
+            int col = _hexGrid.CurrentCell.ColumnIndex;
+            int row = _hexGrid.CurrentCell.RowIndex;
+
+            // Ctrl+V: 編集中は HexGridTB_KeyPress が処理、非編集中はここで処理
+            if (e.KeyCode == Keys.V && e.Control)
+            {
+                if (_hexGrid.IsCurrentCellInEditMode) return;
+                e.Handled          = true;
+                e.SuppressKeyPress = true;
+                if (col >= 1 && col <= 16 && row >= 0) PasteToHexGrid(row, col);
+                return;
+            }
+
+            if (e.KeyCode != Keys.Back && e.KeyCode != Keys.Delete) return;
+            if (_hexGrid.IsCurrentCellInEditMode) return; // 編集中は TextBox ハンドラに委ねる
+            if (col < 1 || col > 16) return;
+            int byteIdx = row * 16 + (col - 1);
+            if (byteIdx >= _data.Length) return;
+
+            e.Handled        = true;
+            e.SuppressKeyPress = true;
+
+            _data[byteIdx] = 0x00;
+            _hexGrid.Rows[row].Cells[col].Value = "00";
+            UpdateHexGridAsciiCell(row);
+
+            if (e.KeyCode == Keys.Back)
+                MoveToPrevByteCell(row, col);
+            // Delete: カーソル移動なし
         }
 
         private static bool IsHexChar(char c)
@@ -570,6 +638,7 @@ namespace EdsStandardBase
                 AllowUserToAddRows          = false,
                 AllowUserToDeleteRows       = false,
                 RowHeadersVisible           = false,
+                ColumnHeadersVisible        = false,   // ヘッダ不要
                 ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
                 SelectionMode               = DataGridViewSelectionMode.CellSelect,
                 BackgroundColor             = Color.FromArgb(255, 255, 200),
@@ -581,12 +650,7 @@ namespace EdsStandardBase
                 EnableHeadersVisualStyles   = false,
                 AutoSizeColumnsMode         = DataGridViewAutoSizeColumnsMode.None,
             };
-            gv.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(170, 150, 50);
-            gv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            gv.ColumnHeadersDefaultCellStyle.Font      = new Font("Consolas", 8.5f, FontStyle.Bold);
-            gv.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            gv.ColumnHeadersHeight = 20;
-            gv.RowTemplate.Height  = 22;
+            gv.RowTemplate.Height = 24;
 
             gv.CellBeginEdit         += (s, e) => { _overlayNibbleCount = 0; };
             gv.EditingControlShowing += ByteOverlay_EditingControlShowing;
@@ -644,7 +708,7 @@ namespace EdsStandardBase
             Point parentPt = tabPage.PointToClient(screenPt);
 
             int overlayW = Math.Max(p.Size * 34 + 4, cellRect.Width);
-            int overlayH = _byteOverlayDgv.ColumnHeadersHeight + _byteOverlayDgv.RowTemplate.Height + 6;
+            int overlayH = _byteOverlayDgv.RowTemplate.Height + 4;
 
             _byteOverlayDgv.SetBounds(parentPt.X, parentPt.Y, overlayW, overlayH);
             _byteOverlayDgv.Visible = true;
@@ -800,20 +864,22 @@ namespace EdsStandardBase
             ParameterDef p = SampleData.Parameters[_overlayParamIdx];
 
             string hex = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
-            if (hex.Length != p.Size * 2)
+            if (hex.Length < 2)
             {
                 MessageBox.Show(
-                    string.Format(
-                        "貼り付けデータのバイト数がパラメータと一致しません。\n" +
-                        "期待: {0} バイト（{1} 文字）\n実際: {2} 文字（{3} バイト相当）",
-                        p.Size, p.Size * 2, hex.Length, hex.Length / 2),
+                    "クリップボードのテキストに無効な文字が含まれています。\n16 進数の文字（0-9, A-F）のみ使用できます。",
                     "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            byte[] bytes = new byte[p.Size];
+            // カーソル（パーキング）位置から貼り付け開始
+            int startCol   = _byteOverlayDgv.CurrentCell != null ? _byteOverlayDgv.CurrentCell.ColumnIndex : 0;
+            int byteCount  = hex.Length / 2;
+            int writeCount = Math.Min(byteCount, p.Size - startCol);
+
+            byte[] bytes = new byte[writeCount];
             bool   valid = true;
-            for (int i = 0; i < p.Size; i++)
+            for (int i = 0; i < writeCount; i++)
             {
                 if (!byte.TryParse(hex.Substring(i * 2, 2),
                     System.Globalization.NumberStyles.HexNumber,
@@ -830,8 +896,9 @@ namespace EdsStandardBase
             }
 
             _byteOverlayDgv.EndEdit();
-            for (int i = 0; i < p.Size; i++)
-                _byteOverlayDgv.Rows[0].Cells[i].Value = bytes[i].ToString("X2");
+            for (int i = 0; i < writeCount; i++)
+                _byteOverlayDgv.Rows[0].Cells[startCol + i].Value = bytes[i].ToString("X2");
+            // writeCount 分だけ上書き。残りのセルは既存値のまま CommitByteOverlay に渡す
             CommitByteOverlay();
         }
 

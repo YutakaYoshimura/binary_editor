@@ -25,7 +25,7 @@ namespace EdsHexBoxBase
     {
         // ─── フィールド ───────────────────────────────────────────
         private byte[]               _data = SampleData.Create();
-        private HexBox               _hexBox;           // Tab①
+        private ParamHexBoxOverlay   _hexBox;           // Tab①
         private DataGridView         _paramGrid;        // Tab②
         private ParamHexBoxOverlay   _paramHexBox;      // Tab② オーバーレイ
         private int                  _overlayParamIdx = -1;
@@ -127,7 +127,7 @@ namespace EdsHexBoxBase
                 Font      = new Font("Meiryo UI", 8.5f),
             });
 
-            _hexBox = new HexBox
+            _hexBox = new ParamHexBoxOverlay
             {
                 Dock                 = DockStyle.Fill,
                 Font                 = new Font("Consolas", 10.5f),
@@ -141,19 +141,20 @@ namespace EdsHexBoxBase
                 SelectionBackColor   = Color.FromArgb(150, 190, 240),
                 SelectionForeColor   = Color.Black,
                 InfoForeColor        = Color.SlateGray,
-                ReadOnly             = false,   // 編集可能
+                InsertActive         = false,
+                ReadOnly             = false,
             };
-            _hexBox.ByteProvider = new DynamicByteProvider(_data);
+            _hexBox.ByteProvider = new FixedByteProvider(_data);
 
             tab.Controls.Add(_hexBox);
             tab.Controls.Add(toolbar);
             return tab;
         }
 
-        /// <summary>HexBox の DynamicByteProvider から _data に書き戻す</summary>
+        /// <summary>HexBox の ByteProvider から _data に書き戻す</summary>
         private void SyncHexBoxToData()
         {
-            DynamicByteProvider prov = _hexBox.ByteProvider as DynamicByteProvider;
+            IByteProvider prov = _hexBox.ByteProvider;
             if (prov == null) return;
             long len = Math.Min(prov.Length, _data.Length);
             for (long i = 0; i < len; i++)
@@ -219,7 +220,9 @@ namespace EdsHexBoxBase
                 InsertActive         = false,
                 ReadOnly             = false,
             };
-            _paramHexBox.Leave += (s, e) => CommitParamHexOverlay();
+            _paramHexBox.Leave  += (s, e) => CommitParamHexOverlay();
+            // 最終バイトの下位ニブル入力後に値を確定する（同期呼び出し）
+            _paramHexBox.OnAtEnd = CommitParamHexOverlay;
 
             tab.Controls.Add(_paramGrid);
             tab.Controls.Add(toolbar);
@@ -413,7 +416,7 @@ namespace EdsHexBoxBase
         private void RefreshAll()
         {
             HideParamHexOverlay();
-            _hexBox.ByteProvider = new DynamicByteProvider(_data);
+            _hexBox.ByteProvider = new FixedByteProvider(_data);
             PopulateParamGrid();
         }
     }
@@ -462,6 +465,59 @@ namespace EdsHexBoxBase
     // ════════════════════════════════════════════════════════════════
     internal class ParamHexBoxOverlay : HexBox
     {
+        /// <summary>
+        /// カーソルが末尾バイトの下位ニブルを超えたときに呼ばれるコールバック。
+        /// null の場合はデフォルト動作（末尾バイトにカーソルを留める）。
+        /// Tab② オーバーレイでは「値確定」アクションをセットして使用する。
+        /// </summary>
+        public Action OnAtEnd { get; set; }
+
+        // FixedByteProvider で末尾バイトを超えた際に下位ニブル位置へ戻すために使用
+        private static readonly System.Reflection.FieldInfo s_nibbleField = FindNibbleField();
+
+        private static System.Reflection.FieldInfo FindNibbleField()
+        {
+            // Be.HexBox 1.6.1 では nibble 位置は _byteCharacterPos (0=上位, 1=下位)
+            string[] candidates = { "_byteCharacterPos", "_nibblePosition", "nibblePosition" };
+            foreach (string name in candidates)
+            {
+                var f = typeof(HexBox).GetField(name,
+                    System.Reflection.BindingFlags.NonPublic |
+                    System.Reflection.BindingFlags.Instance);
+                if (f != null) return f;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// SelectionStart が Provider の末尾を超えていたら最終バイトの下位ニブルに戻す。
+        /// Tab①（全体ビュー）・Tab②（パラメータオーバーレイ）共通。
+        /// </summary>
+        private void ClampCursorToProvider()
+        {
+            IByteProvider prov = ByteProvider;
+            if (prov == null || prov.Length == 0) return;
+            if (SelectionStart >= prov.Length)
+            {
+                if (OnAtEnd != null)
+                {
+                    // Tab②: 最終ニブル入力後に値を確定する（UI スレッドへ遅延実行）
+                    OnAtEnd();
+                }
+                else
+                {
+                    // Tab①: カーソルを末尾バイトの下位ニブルに留める
+                    SelectionStart  = prov.Length - 1;
+                    SelectionLength = 1;
+                    if (s_nibbleField != null)
+                    {
+                        try { s_nibbleField.SetValue(this, 1); } catch { }
+                    }
+                    Invalidate();
+                }
+            }
+        }
+
         protected override void OnKeyDown(KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Back)
@@ -474,7 +530,45 @@ namespace EdsHexBoxBase
                 ZeroCurrentByte(moveToPrev: false);
                 return;
             }
+
             base.OnKeyDown(e);
+            ClampCursorToProvider();
+        }
+
+        protected override void OnKeyPress(KeyPressEventArgs e)
+        {
+            if (!Visible) return; // コミット後に Visible=false になった場合は無視
+
+            // Be.HexBox はニブルの書き込みを OnKeyPress (WM_CHAR) で行う。
+            // base 呼び出し前に「最終バイト下位ニブル + Hex 文字」を先読みし、
+            // base がニブルを書き込んだ直後に確定する。
+            bool commitAfter = OnAtEnd != null
+                               && IsAtLastByteLowNibble()
+                               && IsHexChar(e.KeyChar);
+
+            base.OnKeyPress(e);
+
+            if (commitAfter)
+                OnAtEnd();
+            else
+                ClampCursorToProvider();
+        }
+
+        /// <summary>現在位置が末尾バイトの下位ニブルかどうかを返す。</summary>
+        private bool IsAtLastByteLowNibble()
+        {
+            IByteProvider prov = ByteProvider;
+            if (prov == null || prov.Length == 0) return false;
+            if (SelectionStart != prov.Length - 1) return false;
+            if (s_nibbleField == null) return false;
+            try { return (int)s_nibbleField.GetValue(this) == 1; }
+            catch { return false; }
+        }
+
+        private static bool IsHexChar(char c)
+        {
+            char u = char.ToUpper(c);
+            return (u >= '0' && u <= '9') || (u >= 'A' && u <= 'F');
         }
 
         private void ZeroCurrentByte(bool moveToPrev)
@@ -498,62 +592,73 @@ namespace EdsHexBoxBase
         }
 
         /// <summary>
-        /// Ctrl+V: クリップボードのテキストを Hex バイト列として解釈して貼り付ける。
-        /// "1234" → 0x12, 0x34 として書き込む。
-        /// バイト数不一致・無効文字の場合は警告ダイアログを表示する。
+        /// Be.HexBox は PreProcessMessage → KeyInterpreter.PreProcessWmKeyDown_ControlV で
+        /// Ctrl+V を先に横取りするため ProcessCmdKey より前段でインターセプトする。
         /// </summary>
+        public override bool PreProcessMessage(ref Message msg)
+        {
+            const int WM_KEYDOWN = 0x0100;
+            const int VK_V       = 0x56;
+            if (msg.Msg == WM_KEYDOWN &&
+                (int)msg.WParam == VK_V &&
+                (Control.ModifierKeys & Keys.Control) != 0)
+            {
+                PasteHexFromClipboard();
+                return true; // Be.HexBox の Ctrl+V 処理を完全に抑止
+            }
+            return base.PreProcessMessage(ref msg);
+        }
+
+        /// <summary>
+        /// クリップボードのテキストをHex解釈してカーソル位置から上書きペーストする。
+        /// </summary>
+        private void PasteHexFromClipboard()
+        {
+            string text = Clipboard.GetText();
+            if (string.IsNullOrEmpty(text)) return;
+
+            string hex = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
+            IByteProvider prov = ByteProvider;
+            if (prov == null || hex.Length < 2) return;
+
+            long startPos  = SelectionStart;
+            if (startPos < 0 || startPos >= prov.Length) startPos = 0;
+            int  byteCount  = hex.Length / 2;
+            int  writeCount = (int)Math.Min((long)byteCount, prov.Length - startPos);
+
+            byte[] bytes = new byte[writeCount];
+            bool   valid = true;
+            for (int i = 0; i < writeCount; i++)
+            {
+                if (!byte.TryParse(
+                        hex.Substring(i * 2, 2),
+                        System.Globalization.NumberStyles.HexNumber,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out bytes[i]))
+                { valid = false; break; }
+            }
+
+            if (!valid)
+            {
+                MessageBox.Show(
+                    "クリップボードのテキストに無効な文字が含まれています。\n" +
+                    "16 進数の文字（0-9, A-F）のみ使用できます。",
+                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            for (int i = 0; i < writeCount; i++)
+                prov.WriteByte(startPos + i, bytes[i]);
+            Invalidate();
+        }
+
+        // ProcessCmdKey はフォールバックとして残す（PreProcessMessage が呼ばれない環境向け）
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (keyData == (Keys.Control | Keys.V))
             {
-                string text = Clipboard.GetText();
-                if (!string.IsNullOrEmpty(text))
-                {
-                    string hex = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
-                    IByteProvider prov = ByteProvider;
-                    if (prov != null)
-                    {
-                        if (hex.Length != prov.Length * 2)
-                        {
-                            MessageBox.Show(
-                                string.Format(
-                                    "貼り付けデータのバイト数がパラメータと一致しません。\n" +
-                                    "期待: {0} バイト（{1} 文字）\n実際: {2} 文字（{3} バイト相当）",
-                                    prov.Length, prov.Length * 2,
-                                    hex.Length, hex.Length / 2),
-                                "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        }
-                        else
-                        {
-                            byte[] bytes = new byte[prov.Length];
-                            bool   valid  = true;
-                            for (int i = 0; i < bytes.Length; i++)
-                            {
-                                if (!byte.TryParse(
-                                        hex.Substring(i * 2, 2),
-                                        System.Globalization.NumberStyles.HexNumber,
-                                        System.Globalization.CultureInfo.InvariantCulture,
-                                        out bytes[i]))
-                                { valid = false; break; }
-                            }
-
-                            if (valid)
-                            {
-                                for (long i = 0; i < prov.Length; i++)
-                                    prov.WriteByte(i, bytes[i]);
-                                Invalidate();
-                            }
-                            else
-                            {
-                                MessageBox.Show(
-                                    "クリップボードのテキストに無効な文字が含まれています。\n" +
-                                    "16 進数の文字（0-9, A-F）のみ使用できます。",
-                                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            }
-                        }
-                    }
-                }
-                return true; // HexBox 既定の貼り付けを抑止
+                PasteHexFromClipboard();
+                return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
         }
