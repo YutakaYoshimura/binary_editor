@@ -12,4 +12,4 @@ C:\git\binary_editor\RefProject\EdsHexBoxBase\bin\Debug\EdsHexBoxBase.exe
 C:\git\binary_editor\RefProject\EdsHexBoxBase\bin\Debug\EdsHexBoxBase.pdb
 C:\git\binary_editor\RefProject\EdsHexBoxBase\bin\Debug\Be.Windows.Forms.HexBox.dll
 C:\git\binary_editor\RefProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.csproj.AssemblyReference.cache
-C:\git\binary_editor\RefProject\EdsHexBoxBase\obj\Debug\EdsHexBo.1ABEBA7F.Up2Date
+C:\git\binary_editor\RefProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.csproj.CopyComplete

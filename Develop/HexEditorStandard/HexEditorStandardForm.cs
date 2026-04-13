@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Windows.Forms;
 
 namespace HexEditorStandard
@@ -8,17 +10,25 @@ namespace HexEditorStandard
     /// <summary>
     /// 標準コントロールのみで実装した Hex エディタ検証フォーム（3 タブ構成）
     ///
-    /// Tab① バイナリ全体表示  … HexEditorPanel (カスタム描画)
-    /// Tab② パラメータグリッド (DataGridView + テキスト入力)
-    /// Tab③ パラメータグリッド (DataGridView + TextBox Hex 入力)
+    /// Tab① バイナリ全体表示  … DataGridView (Hex グリッド) で直接編集
+    ///                          下位ニブル入力後に次バイトセルへ自動移動
+    /// Tab② パラメータグリッド … DataGridView。バイト列セルをクリックすると
+    ///                          その場にバイト単位編集の DataGridView をオーバーレイ表示
+    /// Tab③ パラメータグリッド … DataGridView + TextBox Hex 入力（既存 Tab③ を保持）
     /// </summary>
     public class HexEditorStandardForm : Form
     {
         // ─── フィールド ───────────────────────────────────────────
         private byte[]               _data = SampleData.Create();
-        private HexEditorPanel       _hexPanel;             // Tab①
-        private DataGridView         _grid;                 // Tab②
-        private DataGridView         _hexTextGrid;          // Tab③
+        private DataGridView         _hexViewGrid;          // Tab①: DataGridView Hex ビュー
+        private DataGridView         _grid;                 // Tab②: パラメータグリッド
+        private DataGridView         _hexTextGrid;          // Tab③: HexText 列
+        private DataGridView         _byteOverlayDgv;       // Tab② オーバーレイ
+        private int                  _overlayParamIdx = -1; // オーバーレイ対象パラメータ
+        private int                  _hexViewNibbles  = 0;  // Tab① ニブルカウンタ
+        private int                  _overlayNibbles  = 0;  // オーバーレイ ニブルカウンタ
+        private byte                 _hexViewOldByte;       // Tab① Undo 用
+
         private ToolStripStatusLabel _statusLabel;
         private bool                 _suppressGridEvents;
         private TabControl           _tabs;
@@ -58,7 +68,7 @@ namespace HexEditorStandard
             StartPosition = FormStartPosition.CenterScreen;
 
             BuildUI();
-            RefreshHex();
+            PopulateHexViewGrid();
             RefreshGrid();
         }
 
@@ -68,7 +78,6 @@ namespace HexEditorStandard
 
         private void BuildUI()
         {
-            // TabControl は最初に追加する（DockStyle.Fill）
             _tabs = new TabControl { Dock = DockStyle.Fill };
             _tabs.Selecting += OnTabSelecting;
             _tabs.TabPages.Add(BuildHexTab());
@@ -76,7 +85,6 @@ namespace HexEditorStandard
             _tabs.TabPages.Add(BuildHexTextGridTab());
             Controls.Add(_tabs);
 
-            // メニュー
             var menu     = new MenuStrip();
             var fileMenu = new ToolStripMenuItem("ファイル(&F)");
             fileMenu.DropDownItems.Add(new ToolStripMenuItem("開く(&O)...",             null, (s, e) => OpenFile()));
@@ -99,7 +107,6 @@ namespace HexEditorStandard
             MainMenuStrip = menu;
             Controls.Add(menu);
 
-            // ステータスバー
             var strip = new StatusStrip();
             _statusLabel = new ToolStripStatusLabel("サンプルデータを表示中")
             {
@@ -112,7 +119,7 @@ namespace HexEditorStandard
         }
 
         // ────────────────────────────────────────────────────────
-        //  Tab①: バイナリ全体表示 (HexEditorPanel)
+        //  Tab①: バイナリ全体表示 (DataGridView Hex ビュー)
         // ────────────────────────────────────────────────────────
 
         private TabPage BuildHexTab()
@@ -126,52 +133,376 @@ namespace HexEditorStandard
                 BackColor = Color.FromArgb(225, 235, 255),
                 Padding   = new Padding(8, 6, 8, 0)
             };
-            var btn = MakeButton("HexPanel の編集内容 → グリッドへ反映", SyncAndRefreshAll);
+            var btn = MakeButton("Tab②③ に同期", SyncAndRefreshAll);
             btn.Location = new Point(8, 6);
             toolbar.Controls.Add(btn);
             toolbar.Controls.Add(new Label
             {
-                Text      = "※ パネルで直接バイトを編集後、このボタンで Tab②③ に同期します",
+                Text      = "※ Hex グリッドで直接バイトを編集できます。下位ニブル入力後、自動で次のバイトへ移動します。",
                 AutoSize  = true,
                 Location  = new Point(btn.Width + 16, 10),
                 ForeColor = Color.DimGray,
                 Font      = new Font("Meiryo UI", 8.5f)
             });
 
-            _hexPanel = new HexEditorPanel
-            {
-                Dock      = DockStyle.Fill,
-                BackColor = Color.White,
-            };
-            _hexPanel.Changed += (s, e) =>
-            {
-                _statusLabel.Text = "バイナリデータを編集しました";
-            };
+            _hexViewGrid = BuildHexViewDataGridView();
 
-            // バイト確定時に Undo コマンドを記録する
-            _hexPanel.ByteEdited += (s, e) =>
-            {
-                _undoMgr.Push(new ByteRangeCommand(
-                    e.Index,
-                    new byte[] { e.OldValue },
-                    new byte[] { e.NewValue },
-                    string.Format("オフセット 0x{0:X4} を {1:X2} → {2:X2} に変更",
-                        e.Index, e.OldValue, e.NewValue)));
-                UpdateUndoRedoMenu();
-            };
-
-            tab.Controls.Add(_hexPanel);
+            tab.Controls.Add(_hexViewGrid);
             tab.Controls.Add(toolbar);
             return tab;
         }
 
+        private DataGridView BuildHexViewDataGridView()
+        {
+            var gv = new DataGridView
+            {
+                Dock                        = DockStyle.Fill,
+                AllowUserToAddRows          = false,
+                AllowUserToDeleteRows       = false,
+                AllowUserToResizeRows       = false,
+                RowHeadersVisible           = false,
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
+                SelectionMode               = DataGridViewSelectionMode.CellSelect,
+                BackgroundColor             = Color.White,
+                GridColor                   = Color.FromArgb(210, 220, 235),
+                BorderStyle                 = BorderStyle.None,
+                Font                        = new Font("Consolas", 9.5f),
+                RowTemplate                 = { Height = 20 },
+                EnableHeadersVisualStyles   = false,
+                AutoSizeColumnsMode         = DataGridViewAutoSizeColumnsMode.None,
+                EditMode                    = DataGridViewEditMode.EditOnKeystroke,
+                MultiSelect                 = false,
+            };
+            gv.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(50, 85, 145);
+            gv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            gv.ColumnHeadersDefaultCellStyle.Font      = new Font("Consolas", 9f, FontStyle.Bold);
+            gv.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            gv.ColumnHeadersHeight = 24;
+
+            // Offset 列 (読み取り専用)
+            gv.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name     = "Offset", HeaderText = "Offset",
+                Width    = 82, ReadOnly = true,
+                Resizable = DataGridViewTriState.False,
+                DefaultCellStyle =
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleLeft,
+                    ForeColor = Color.FromArgb(80, 100, 180),
+                    Font      = new Font("Consolas", 9.5f),
+                }
+            });
+
+            // バイト列 × 16 (00〜0F)
+            for (int i = 0; i < 16; i++)
+            {
+                gv.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name      = "B" + i.ToString("X2"),
+                    HeaderText = i.ToString("X2"),
+                    Width     = 28,
+                    Resizable = DataGridViewTriState.False,
+                    DefaultCellStyle =
+                    {
+                        Alignment = DataGridViewContentAlignment.MiddleCenter,
+                    }
+                });
+            }
+
+            // ASCII テキスト列 (読み取り専用)
+            gv.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name         = "Text",
+                HeaderText   = "Text",
+                ReadOnly     = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                Resizable    = DataGridViewTriState.True,
+                DefaultCellStyle =
+                {
+                    Alignment = DataGridViewContentAlignment.MiddleLeft,
+                    ForeColor = Color.DimGray,
+                }
+            });
+
+            // 偶数/奇数行の背景色
+            gv.CellFormatting += (s, e) =>
+            {
+                if (e.RowIndex < 0) return;
+                e.CellStyle.BackColor = (e.RowIndex % 2 == 0)
+                    ? Color.White
+                    : Color.FromArgb(246, 249, 255);
+            };
+
+            // バイト列以外は編集禁止
+            gv.CellBeginEdit += (s, e) =>
+            {
+                if (e.ColumnIndex < 1 || e.ColumnIndex > 16) { e.Cancel = true; return; }
+                int byteIdx = e.RowIndex * 16 + (e.ColumnIndex - 1);
+                if (byteIdx >= _data.Length) { e.Cancel = true; return; }
+
+                _hexViewNibbles = 0;
+                _hexViewOldByte = _data[byteIdx];
+            };
+
+            // 編集確定 → _data に書き戻し + Undo 記録
+            gv.CellEndEdit += (s, e) =>
+            {
+                if (e.ColumnIndex < 1 || e.ColumnIndex > 16) return;
+                int byteIdx = e.RowIndex * 16 + (e.ColumnIndex - 1);
+                if (byteIdx >= _data.Length) return;
+
+                var    cell = gv.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                string val  = cell.Value?.ToString() ?? "";
+
+                if (byte.TryParse(val, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
+                {
+                    byte oldByte = _hexViewOldByte;
+                    _data[byteIdx] = b;
+                    cell.Value     = b.ToString("X2");
+
+                    UpdateHexViewAsciiCell(gv, e.RowIndex);
+
+                    if (b != oldByte)
+                    {
+                        _undoMgr.Push(new ByteRangeCommand(
+                            byteIdx, new byte[] { oldByte }, new byte[] { b },
+                            string.Format("オフセット 0x{0:X4} を {1:X2} → {2:X2} に変更",
+                                byteIdx, oldByte, b)));
+                        UpdateUndoRedoMenu();
+                        _statusLabel.Text = string.Format(
+                            "0x{0:X4}: {1:X2} → {2:X2}", byteIdx, oldByte, b);
+                    }
+                }
+                else
+                {
+                    cell.Value = _data[byteIdx].ToString("X2");
+                }
+
+                _hexViewNibbles = 0;
+            };
+
+            // 編集コントロール表示時: 入力制限 + BackSpace/Delete + ニブル自動進行 + Paste
+            gv.EditingControlShowing += (s, e) =>
+            {
+                int col = gv.CurrentCell?.ColumnIndex ?? -1;
+                if (col < 1 || col > 16) return;
+
+                var tb = e.Control as TextBox;
+                if (tb == null) return;
+
+                tb.MaxLength        = 2;
+                tb.CharacterCasing  = CharacterCasing.Upper;
+
+                tb.KeyDown  -= HexView_KeyDown;
+                tb.KeyDown  += HexView_KeyDown;
+                tb.KeyPress -= HexView_KeyPress;
+                tb.KeyPress += HexView_KeyPress;
+            };
+
+            return gv;
+        }
+
+        private void PopulateHexViewGrid()
+        {
+            _hexViewGrid.Rows.Clear();
+            for (int lineBase = 0; lineBase < _data.Length; lineBase += 16)
+            {
+                object[] cells = new object[18];
+                cells[0] = lineBase.ToString("X8");
+
+                var ascii = new StringBuilder();
+                for (int b = 0; b < 16; b++)
+                {
+                    int idx = lineBase + b;
+                    if (idx < _data.Length)
+                    {
+                        cells[b + 1] = _data[idx].ToString("X2");
+                        byte bv = _data[idx];
+                        ascii.Append((bv >= 0x20 && bv < 0x7F) ? (char)bv : '.');
+                    }
+                    else
+                    {
+                        cells[b + 1] = string.Empty;
+                    }
+                }
+                cells[17] = ascii.ToString();
+                _hexViewGrid.Rows.Add(cells);
+            }
+        }
+
+        private void UpdateHexViewAsciiCell(DataGridView gv, int rowIndex)
+        {
+            int lineBase = rowIndex * 16;
+            var sb = new StringBuilder();
+            for (int b = 0; b < 16; b++)
+            {
+                int idx = lineBase + b;
+                if (idx >= _data.Length) break;
+                byte bv = _data[idx];
+                sb.Append((bv >= 0x20 && bv < 0x7F) ? (char)bv : '.');
+            }
+            if (rowIndex < gv.Rows.Count)
+                gv.Rows[rowIndex].Cells[17].Value = sb.ToString();
+        }
+
+        // ── Tab① キー操作ハンドラ ───────────────────────────────
+
+        private void HexView_KeyDown(object sender, KeyEventArgs e)
+        {
+            int col = _hexViewGrid?.CurrentCell?.ColumnIndex ?? -1;
+            int row = _hexViewGrid?.CurrentCell?.RowIndex   ?? -1;
+            if (col < 1 || col > 16 || row < 0) return;
+            int byteIdx = row * 16 + (col - 1);
+
+            if (e.KeyCode == Keys.Back)
+            {
+                if (byteIdx < _data.Length)
+                    _data[byteIdx] = 0x00;
+                ((TextBox)sender).Text = "00";
+                _hexViewNibbles = 0;
+
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+
+                // コミットしてから前のセルへ
+                _hexViewGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+                _hexViewGrid.EndEdit();
+
+                int prevCol = col - 1;
+                int prevRow = row;
+                if (prevCol < 1) { prevCol = 16; prevRow--; }
+                if (prevRow >= 0)
+                {
+                    int prevIdx = prevRow * 16 + (prevCol - 1);
+                    if (prevIdx >= 0 && prevIdx < _data.Length)
+                    {
+                        _hexViewGrid.CurrentCell = _hexViewGrid.Rows[prevRow].Cells[prevCol];
+                        _hexViewGrid.BeginEdit(true);
+                    }
+                }
+            }
+            else if (e.KeyCode == Keys.Delete)
+            {
+                if (byteIdx < _data.Length)
+                    _data[byteIdx] = 0x00;
+                ((TextBox)sender).Text = "00";
+                _hexViewNibbles = 0;
+                UpdateHexViewAsciiCell(_hexViewGrid, row);
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+        }
+
+        private void HexView_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            // BackSpace は KeyDown で処理済み
+            if (e.KeyChar == '\b') { e.Handled = true; return; }
+
+            // Ctrl+V
+            if (e.KeyChar == '\u0016') { HexViewPaste(); e.Handled = true; return; }
+
+            char c = char.ToUpper(e.KeyChar);
+            bool isHex = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F');
+            if (!isHex) { e.Handled = true; return; }
+
+            _hexViewNibbles++;
+            if (_hexViewNibbles >= 2)
+            {
+                _hexViewNibbles = 0;
+                _hexViewGrid.BeginInvoke(new Action(AdvanceHexViewCell));
+            }
+        }
+
+        private void AdvanceHexViewCell()
+        {
+            if (_hexViewGrid?.CurrentCell == null) return;
+            int col = _hexViewGrid.CurrentCell.ColumnIndex;
+            int row = _hexViewGrid.CurrentCell.RowIndex;
+
+            _hexViewGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            _hexViewGrid.EndEdit();
+
+            int nextCol = col + 1;
+            int nextRow = row;
+            if (nextCol > 16) { nextCol = 1; nextRow++; }
+
+            if (nextRow < _hexViewGrid.Rows.Count)
+            {
+                int nextByteIdx = nextRow * 16 + (nextCol - 1);
+                if (nextByteIdx < _data.Length)
+                {
+                    _hexViewGrid.CurrentCell = _hexViewGrid.Rows[nextRow].Cells[nextCol];
+                    _hexViewGrid.BeginEdit(true);
+                    _hexViewNibbles = 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Tab① Hex ビューへの Ctrl+V 貼り付け。
+        /// "1234" → 現在セルから 0x12, 0x34 を順に書き込む。
+        /// バイト数不一致または無効な文字の場合は警告を表示する。
+        /// </summary>
+        private void HexViewPaste()
+        {
+            string text = Clipboard.GetText();
+            if (string.IsNullOrEmpty(text)) return;
+
+            string hex = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
+            if (hex.Length == 0 || hex.Length % 2 != 0)
+            {
+                MessageBox.Show(
+                    "クリップボードのテキストが無効です。\n16 進数の偶数文字（例: 1234 または 12 34）を指定してください。",
+                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 全文字が Hex 文字かチェック
+            foreach (char c in hex)
+            {
+                if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F')))
+                {
+                    MessageBox.Show(
+                        "クリップボードのテキストに無効な文字が含まれています。\n16 進数の文字（0-9, A-F）のみ使用できます。",
+                        "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            int col = _hexViewGrid?.CurrentCell?.ColumnIndex ?? -1;
+            int row = _hexViewGrid?.CurrentCell?.RowIndex   ?? -1;
+            if (col < 1 || col > 16 || row < 0) return;
+
+            int numBytes = hex.Length / 2;
+            for (int i = 0; i < numBytes; i++)
+            {
+                int tCol = col + i;
+                int tRow = row;
+                while (tCol > 16) { tCol -= 16; tRow++; }
+                if (tRow >= _hexViewGrid.Rows.Count) break;
+                int byteIdx = tRow * 16 + (tCol - 1);
+                if (byteIdx >= _data.Length) break;
+
+                if (byte.TryParse(hex.Substring(i * 2, 2),
+                    NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
+                {
+                    _data[byteIdx] = b;
+                    _hexViewGrid.Rows[tRow].Cells[tCol].Value = b.ToString("X2");
+                }
+            }
+
+            // 影響を受けた行の ASCII 列を更新
+            for (int r = row; r <= row + numBytes / 16 + 1 && r < _hexViewGrid.Rows.Count; r++)
+                UpdateHexViewAsciiCell(_hexViewGrid, r);
+        }
+
         // ────────────────────────────────────────────────────────
-        //  Tab②: パラメータグリッド (DataGridView + テキスト入力)
+        //  Tab②: パラメータグリッド + DataGridView バイトオーバーレイ
         // ────────────────────────────────────────────────────────
 
         private TabPage BuildGridTab()
         {
-            var tab = new TabPage("② パラメータグリッド (テキスト入力)");
+            var tab = new TabPage("② パラメータグリッド (バイト編集)");
 
             var toolbar = new Panel
             {
@@ -180,12 +511,12 @@ namespace HexEditorStandard
                 BackColor = Color.FromArgb(225, 255, 225),
                 Padding   = new Padding(8, 6, 8, 0)
             };
-            var btn = MakeButton("グリッドの編集内容 → HexPanel へ反映", RefreshHex);
+            var btn = MakeButton("グリッドの編集内容 → Tab①③ へ反映", () => { PopulateHexViewGrid(); BuildHexTextGridRows(); });
             btn.Location = new Point(8, 6);
             toolbar.Controls.Add(btn);
             toolbar.Controls.Add(new Label
             {
-                Text      = "※「値」列を直接編集 → _data に即時反映",
+                Text      = "※「バイト列」セルをクリックするとバイト単位の DataGridView エディタが表示されます",
                 AutoSize  = true,
                 Location  = new Point(btn.Width + 16, 10),
                 ForeColor = Color.DimGray,
@@ -193,8 +524,29 @@ namespace HexEditorStandard
             });
 
             _grid = BuildTextGrid();
+
+            // バイト列セルをクリック → オーバーレイ表示
+            _grid.CellClick += (s, e) =>
+            {
+                if (e.ColumnIndex == COL_RAWBYTES && e.RowIndex >= 0 &&
+                    e.RowIndex < SampleData.Parameters.Length &&
+                    !SampleData.Parameters[e.RowIndex].IsReadOnly)
+                {
+                    ShowByteOverlay(e.RowIndex);
+                }
+                else
+                {
+                    HideByteOverlay();
+                }
+            };
+
+            // オーバーレイを組み立てる
+            _byteOverlayDgv = BuildByteOverlayDgv();
+
             tab.Controls.Add(_grid);
             tab.Controls.Add(toolbar);
+            tab.Controls.Add(_byteOverlayDgv); // 最後に追加 → 最前面
+
             return tab;
         }
 
@@ -220,38 +572,34 @@ namespace HexEditorStandard
             gv.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(30, 60, 100);
             gv.ColumnHeadersHeight                     = 26;
 
-            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name",     HeaderText = "パラメータ名",    ReadOnly = true,  FillWeight = 16 });
-            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Offset",   HeaderText = "オフセット",      ReadOnly = true,  FillWeight = 10 });
-            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Size",     HeaderText = "サイズ",         ReadOnly = true,  FillWeight = 7  });
-            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Type",     HeaderText = "データ型",       ReadOnly = true,  FillWeight = 14 });
-            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "RawBytes", HeaderText = "生バイト列",      ReadOnly = true,  FillWeight = 20 });
-            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Value",    HeaderText = "値  （編集可）",  ReadOnly = false, FillWeight = 33 });
+            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name",     HeaderText = "パラメータ名",   ReadOnly = true,  FillWeight = 16 });
+            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Offset",   HeaderText = "オフセット",     ReadOnly = true,  FillWeight = 10 });
+            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Size",     HeaderText = "サイズ",        ReadOnly = true,  FillWeight = 7  });
+            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Type",     HeaderText = "データ型",      ReadOnly = true,  FillWeight = 14 });
+            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "RawBytes", HeaderText = "バイト列 ✎",    ReadOnly = true,  FillWeight = 20 });
+            gv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Value",    HeaderText = "値  （編集可）", ReadOnly = false, FillWeight = 33 });
 
             gv.Columns["Offset"].DefaultCellStyle.Alignment   = DataGridViewContentAlignment.MiddleCenter;
             gv.Columns["Size"].DefaultCellStyle.Alignment     = DataGridViewContentAlignment.MiddleCenter;
             gv.Columns["RawBytes"].DefaultCellStyle.Font      = new Font("Consolas", 9f);
             gv.Columns["RawBytes"].DefaultCellStyle.ForeColor = Color.DarkSlateGray;
+            // バイト列列は選択・クリック可能であることを示す背景色
+            gv.Columns["RawBytes"].DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 225);
 
             gv.CellFormatting += (s, e) =>
             {
                 if (e.RowIndex < 0 || e.RowIndex >= SampleData.Parameters.Length) return;
                 ParameterDef p = SampleData.Parameters[e.RowIndex];
                 if (p.IsReadOnly)
-                {
-                    e.CellStyle.BackColor = Color.FromArgb(245, 245, 245);
-                    e.CellStyle.ForeColor = Color.Gray;
-                }
+                { e.CellStyle.BackColor = Color.FromArgb(245, 245, 245); e.CellStyle.ForeColor = Color.Gray; }
                 else if (e.ColumnIndex == COL_VALUE)
-                {
-                    e.CellStyle.BackColor = Color.FromArgb(255, 255, 210);
-                }
+                { e.CellStyle.BackColor = Color.FromArgb(255, 255, 210); }
             };
 
             gv.CellBeginEdit += (s, e) =>
             {
                 if (e.ColumnIndex != COL_VALUE) { e.Cancel = true; return; }
-                if (e.RowIndex < SampleData.Parameters.Length &&
-                    SampleData.Parameters[e.RowIndex].IsReadOnly)
+                if (e.RowIndex < SampleData.Parameters.Length && SampleData.Parameters[e.RowIndex].IsReadOnly)
                     e.Cancel = true;
             };
 
@@ -260,11 +608,10 @@ namespace HexEditorStandard
                 if (_suppressGridEvents || e.ColumnIndex != COL_VALUE) return;
                 if (e.RowIndex >= SampleData.Parameters.Length) return;
 
-                ParameterDef       param = SampleData.Parameters[e.RowIndex];
-                DataGridViewCell   cell  = gv.Rows[e.RowIndex].Cells[COL_VALUE];
-                string             val   = cell.Value != null ? cell.Value.ToString() : string.Empty;
+                ParameterDef     param = SampleData.Parameters[e.RowIndex];
+                DataGridViewCell cell  = gv.Rows[e.RowIndex].Cells[COL_VALUE];
+                string           val   = cell.Value != null ? cell.Value.ToString() : string.Empty;
 
-                // 編集前の値を保存
                 byte[] oldBytes = new byte[param.Size];
                 Array.Copy(_data, param.Offset, oldBytes, 0, param.Size);
 
@@ -282,14 +629,294 @@ namespace HexEditorStandard
                     _undoMgr.Push(new ByteRangeCommand(param.Offset, oldBytes, newBytes,
                         string.Format("{0} を編集", param.Name)));
                     UpdateUndoRedoMenu();
-
                     gv.Rows[e.RowIndex].Cells[COL_RAWBYTES].Value = param.ReadRawBytes(_data);
-                    _statusLabel.Text = string.Format("{0} を更新しました → {1}",
-                        param.Name, param.ReadRawBytes(_data));
+                    _statusLabel.Text = string.Format("{0} を更新しました → {1}", param.Name, param.ReadRawBytes(_data));
                 }
             };
 
             return gv;
+        }
+
+        // ── バイトオーバーレイ DataGridView ──────────────────────
+
+        private DataGridView BuildByteOverlayDgv()
+        {
+            var gv = new DataGridView
+            {
+                Visible               = false,
+                AllowUserToAddRows    = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false,
+                RowHeadersVisible     = false,
+                ColumnHeadersVisible  = false,
+                ScrollBars            = ScrollBars.None,
+                BorderStyle           = BorderStyle.FixedSingle,
+                SelectionMode         = DataGridViewSelectionMode.CellSelect,
+                BackgroundColor       = Color.FromArgb(255, 255, 225),
+                GridColor             = Color.LightSteelBlue,
+                Font                  = new Font("Consolas", 10f),
+                MultiSelect           = false,
+                EditMode              = DataGridViewEditMode.EditOnEnter,
+            };
+
+            gv.Leave += (s, e) => CommitByteOverlay();
+
+            gv.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Escape)
+                {
+                    HideByteOverlay();
+                    e.Handled = true;
+                }
+            };
+
+            gv.EditingControlShowing += (s, e) =>
+            {
+                var tb = e.Control as TextBox;
+                if (tb == null) return;
+
+                _overlayNibbles    = 0;
+                tb.MaxLength       = 2;
+                tb.CharacterCasing = CharacterCasing.Upper;
+
+                tb.KeyDown  -= Overlay_TextBoxKeyDown;
+                tb.KeyDown  += Overlay_TextBoxKeyDown;
+                tb.KeyPress -= Overlay_TextBoxKeyPress;
+                tb.KeyPress += Overlay_TextBoxKeyPress;
+            };
+
+            return gv;
+        }
+
+        private void ShowByteOverlay(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= SampleData.Parameters.Length) return;
+            ParameterDef p = SampleData.Parameters[rowIndex];
+            if (p.IsReadOnly) return;
+
+            _overlayParamIdx = rowIndex;
+            _overlayNibbles  = 0;
+
+            // 列をパラメータのバイト数に合わせて再構築
+            _byteOverlayDgv.Columns.Clear();
+            const int COL_W = 34;
+            for (int i = 0; i < p.Size; i++)
+            {
+                _byteOverlayDgv.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Width         = COL_W,
+                    MinimumWidth  = COL_W,
+                    MaxInputLength = 2,
+                    Resizable     = DataGridViewTriState.False,
+                    DefaultCellStyle =
+                    {
+                        Alignment = DataGridViewContentAlignment.MiddleCenter,
+                        BackColor = Color.FromArgb(255, 255, 225),
+                        Font      = new Font("Consolas", 10f),
+                    }
+                });
+            }
+
+            // 現在のバイト値を行に投入
+            _byteOverlayDgv.Rows.Clear();
+            var row = new DataGridViewRow();
+            row.CreateCells(_byteOverlayDgv);
+            for (int i = 0; i < p.Size; i++)
+                row.Cells[i].Value = _data[p.Offset + i].ToString("X2");
+            _byteOverlayDgv.Rows.Add(row);
+            _byteOverlayDgv.Rows[0].Height = 28;
+
+            // バイト列セルの矩形を TabPage 座標に変換して位置決め
+            Rectangle cellBounds = _grid.GetCellDisplayRectangle(COL_RAWBYTES, rowIndex, false);
+            if (cellBounds.IsEmpty) return;
+
+            Point screenPt   = _grid.PointToScreen(new Point(cellBounds.Left, cellBounds.Top));
+            Point tabLocalPt = _grid.Parent.PointToClient(screenPt);
+
+            _byteOverlayDgv.Location = tabLocalPt;
+            _byteOverlayDgv.Size     = new Size(p.Size * COL_W + 4, 32);
+            _byteOverlayDgv.Visible  = true;
+            _byteOverlayDgv.BringToFront();
+            _byteOverlayDgv.Focus();
+            _byteOverlayDgv.CurrentCell = _byteOverlayDgv.Rows[0].Cells[0];
+            _byteOverlayDgv.BeginEdit(true);
+        }
+
+        private void CommitByteOverlay()
+        {
+            if (_overlayParamIdx < 0 || _overlayParamIdx >= SampleData.Parameters.Length)
+            {
+                _byteOverlayDgv.Visible = false;
+                _overlayParamIdx = -1;
+                return;
+            }
+
+            ParameterDef p = SampleData.Parameters[_overlayParamIdx];
+
+            _byteOverlayDgv.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            _byteOverlayDgv.EndEdit();
+
+            byte[] oldBytes = new byte[p.Size];
+            Array.Copy(_data, p.Offset, oldBytes, 0, p.Size);
+
+            byte[] newBytes = new byte[p.Size];
+            for (int i = 0; i < p.Size; i++)
+            {
+                string val = _byteOverlayDgv.Rows[0].Cells[i].Value?.ToString() ?? "00";
+                if (!byte.TryParse(val, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out newBytes[i]))
+                    newBytes[i] = oldBytes[i];
+            }
+
+            Array.Copy(newBytes, 0, _data, p.Offset, p.Size);
+
+            bool changed = false;
+            for (int i = 0; i < p.Size; i++)
+                if (oldBytes[i] != newBytes[i]) { changed = true; break; }
+
+            if (changed)
+            {
+                _undoMgr.Push(new ByteRangeCommand(p.Offset, oldBytes, newBytes,
+                    string.Format("{0} を編集", p.Name)));
+                UpdateUndoRedoMenu();
+                _statusLabel.Text = string.Format("{0} を更新しました → {1}", p.Name, p.ReadRawBytes(_data));
+            }
+
+            _byteOverlayDgv.Visible = false;
+            _overlayParamIdx = -1;
+
+            RefreshGrid();
+        }
+
+        private void HideByteOverlay()
+        {
+            _byteOverlayDgv.Visible = false;
+            _overlayParamIdx = -1;
+        }
+
+        // ── オーバーレイ キー操作ハンドラ ────────────────────────
+
+        private void Overlay_TextBoxKeyDown(object sender, KeyEventArgs e)
+        {
+            int col = _byteOverlayDgv?.CurrentCell?.ColumnIndex ?? -1;
+            if (col < 0) return;
+
+            if (e.KeyCode == Keys.Back)
+            {
+                // カーソル位置のバイトを 00 にして前のセルへ移動
+                _byteOverlayDgv.Rows[0].Cells[col].Value = "00";
+                ((TextBox)sender).Text = "00";
+                _overlayNibbles = 0;
+
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+
+                _byteOverlayDgv.CommitEdit(DataGridViewDataErrorContexts.Commit);
+                if (col > 0)
+                {
+                    _byteOverlayDgv.CurrentCell = _byteOverlayDgv.Rows[0].Cells[col - 1];
+                    _byteOverlayDgv.BeginEdit(true);
+                }
+            }
+            else if (e.KeyCode == Keys.Delete)
+            {
+                // カーソル位置のバイトを 00 にしてカーソルは移動しない
+                _byteOverlayDgv.Rows[0].Cells[col].Value = "00";
+                ((TextBox)sender).Text = "00";
+                _overlayNibbles = 0;
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+            else if (e.KeyCode == Keys.Return)
+            {
+                CommitByteOverlay();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+            }
+        }
+
+        private void Overlay_TextBoxKeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == '\b')    { e.Handled = true; return; } // KeyDown で処理済み
+            if (e.KeyChar == '\r')    { e.Handled = true; return; }
+            if (e.KeyChar == '\u001b'){ e.Handled = true; return; }
+
+            // Ctrl+V
+            if (e.KeyChar == '\u0016') { OverlayPaste(); e.Handled = true; return; }
+
+            char c = char.ToUpper(e.KeyChar);
+            bool isHex = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F');
+            if (!isHex) { e.Handled = true; return; }
+
+            _overlayNibbles++;
+            if (_overlayNibbles >= 2)
+            {
+                _overlayNibbles = 0;
+                _byteOverlayDgv.BeginInvoke(new Action(AdvanceOverlayCell));
+            }
+        }
+
+        private void AdvanceOverlayCell()
+        {
+            if (_byteOverlayDgv == null || _overlayParamIdx < 0) return;
+            if (_overlayParamIdx >= SampleData.Parameters.Length) return;
+            ParameterDef p = SampleData.Parameters[_overlayParamIdx];
+
+            int col = _byteOverlayDgv.CurrentCell?.ColumnIndex ?? -1;
+            if (col < 0) return;
+
+            _byteOverlayDgv.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            _byteOverlayDgv.EndEdit();
+
+            if (col < p.Size - 1)
+            {
+                // 次のバイトセルへ移動
+                _byteOverlayDgv.CurrentCell = _byteOverlayDgv.Rows[0].Cells[col + 1];
+                _byteOverlayDgv.BeginEdit(true);
+                _overlayNibbles = 0;
+            }
+            // 最後のバイトの場合はカーソルをとどめる（移動しない）
+        }
+
+        /// <summary>
+        /// オーバーレイへの Ctrl+V 貼り付け。
+        /// "1234" → cells[0]="12", cells[1]="34" として書き込む。
+        /// パラメータのバイト数と一致しない場合は警告を表示する。
+        /// </summary>
+        private void OverlayPaste()
+        {
+            if (_overlayParamIdx < 0 || _overlayParamIdx >= SampleData.Parameters.Length) return;
+            ParameterDef p = SampleData.Parameters[_overlayParamIdx];
+
+            string text = Clipboard.GetText();
+            if (string.IsNullOrEmpty(text)) return;
+
+            string hex = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
+
+            if (hex.Length != p.Size * 2)
+            {
+                MessageBox.Show(
+                    string.Format(
+                        "貼り付けデータのバイト数がパラメータと一致しません。\n" +
+                        "期待: {0} バイト（{1} 文字）\n実際: {2} 文字",
+                        p.Size, p.Size * 2, hex.Length),
+                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            for (int i = 0; i < p.Size; i++)
+            {
+                if (!byte.TryParse(hex.Substring(i * 2, 2),
+                    NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _))
+                {
+                    MessageBox.Show(
+                        "クリップボードのテキストに無効な文字が含まれています。\n16 進数の文字（0-9, A-F）のみ使用できます。",
+                        "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            for (int i = 0; i < p.Size; i++)
+                _byteOverlayDgv.Rows[0].Cells[i].Value = hex.Substring(i * 2, 2);
         }
 
         // ────────────────────────────────────────────────────────
@@ -307,7 +934,7 @@ namespace HexEditorStandard
                 BackColor = Color.FromArgb(255, 240, 210),
                 Padding   = new Padding(8, 6, 8, 0)
             };
-            var btn = MakeButton("HexPanel①へ反映", RefreshHex);
+            var btn = MakeButton("Tab①へ反映", () => PopulateHexViewGrid());
             btn.Location = new Point(8, 6);
             toolbar.Controls.Add(btn);
             toolbar.Controls.Add(new Label
@@ -374,7 +1001,6 @@ namespace HexEditorStandard
             hexBytesCol.DefaultCellStyle.Font      = new Font("Consolas", 10f);
             gv.Columns.Add(hexBytesCol);
 
-            // 行背景色
             gv.CellFormatting += (s, e) =>
             {
                 if (e.RowIndex < 0 || e.RowIndex >= SampleData.Parameters.Length) return;
@@ -384,7 +1010,6 @@ namespace HexEditorStandard
                 e.CellStyle.ForeColor = p.IsReadOnly ? Color.FromArgb(130, 130, 130) : Color.FromArgb(20, 20, 20);
             };
 
-            // 値確定 → Undo 記録 → _data に書き戻す
             gv.CellValueChanged += (s, e) =>
             {
                 if (e.RowIndex < 0 || e.RowIndex >= SampleData.Parameters.Length) return;
@@ -394,7 +1019,6 @@ namespace HexEditorStandard
                 byte[]       newBytes = gv.Rows[e.RowIndex].Cells[COL_HEX_BYTES].Value as byte[];
                 if (newBytes == null || newBytes.Length != p.Size) return;
 
-                // 書き戻し前の値を保存
                 byte[] oldBytes = new byte[p.Size];
                 Array.Copy(_data, p.Offset, oldBytes, 0, p.Size);
 
@@ -411,8 +1035,7 @@ namespace HexEditorStandard
                     UpdateUndoRedoMenu();
                 }
 
-                _statusLabel.Text = string.Format("{0} を更新しました → {1}",
-                    p.Name, p.ReadRawBytes(_data));
+                _statusLabel.Text = string.Format("{0} を更新しました → {1}", p.Name, p.ReadRawBytes(_data));
             };
 
             gv.CurrentCellDirtyStateChanged += (s, e) =>
@@ -427,11 +1050,9 @@ namespace HexEditorStandard
         private void BuildHexTextGridRows()
         {
             _hexTextGrid.Rows.Clear();
-
             for (int i = 0; i < SampleData.Parameters.Length; i++)
             {
                 ParameterDef p = SampleData.Parameters[i];
-
                 byte[] paramBytes = new byte[p.Size];
                 Array.Copy(_data, p.Offset, paramBytes, 0, p.Size);
 
@@ -456,11 +1077,19 @@ namespace HexEditorStandard
             int to   = e.TabPageIndex;
             if (from == to) return;
 
+            // Tab① を離れるとき: 編集中のセルをコミット
+            if (from == 0 && _hexViewGrid != null)
+                _hexViewGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+
+            // Tab② を離れるとき: オーバーレイを閉じる
+            if (from == 1)
+                HideByteOverlay();
+
             switch (to)
             {
-                case 0: RefreshHex();              break;
-                case 1: RefreshGrid();             break;
-                case 2: BuildHexTextGridRows();    break;
+                case 0: PopulateHexViewGrid(); break;
+                case 1: RefreshGrid();         break;
+                case 2: BuildHexTextGridRows(); break;
             }
         }
 
@@ -468,15 +1097,13 @@ namespace HexEditorStandard
         //  データ同期
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        /// <summary>_data の内容で HexEditorPanel を更新する</summary>
         private void RefreshHex()
         {
-            _hexPanel.Data = _data;
+            PopulateHexViewGrid();
             _statusLabel.Text = string.Format(
-                "HexPanel (Tab①) を更新しました ({0:N0} bytes)", _data.Length);
+                "Hex ビュー (Tab①) を更新しました ({0:N0} bytes)", _data.Length);
         }
 
-        /// <summary>_data の内容で Tab② DataGridView を更新する</summary>
         private void RefreshGrid()
         {
             _suppressGridEvents = true;
@@ -498,7 +1125,6 @@ namespace HexEditorStandard
 
         private void SyncAndRefreshAll()
         {
-            // HexEditorPanel は _data を直接編集するので追加同期は不要
             RefreshGrid();
             BuildHexTextGridRows();
             _statusLabel.Text = string.Format(
@@ -518,7 +1144,7 @@ namespace HexEditorStandard
                 _data = File.ReadAllBytes(dlg.FileName);
                 _undoMgr.Clear();
                 UpdateUndoRedoMenu();
-                RefreshHex();
+                PopulateHexViewGrid();
                 RefreshGrid();
                 BuildHexTextGridRows();
                 _statusLabel.Text = string.Format(
@@ -542,7 +1168,7 @@ namespace HexEditorStandard
             _data = SampleData.Create();
             _undoMgr.Clear();
             UpdateUndoRedoMenu();
-            RefreshHex();
+            PopulateHexViewGrid();
             RefreshGrid();
             BuildHexTextGridRows();
             _statusLabel.Text = "サンプルデータにリセットしました";
@@ -583,7 +1209,7 @@ namespace HexEditorStandard
         {
             switch (_tabs.SelectedIndex)
             {
-                case 0: RefreshHex();           break;
+                case 0: PopulateHexViewGrid(); break;
                 case 1: RefreshGrid();          break;
                 case 2: BuildHexTextGridRows(); break;
             }

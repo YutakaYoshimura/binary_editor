@@ -1,0 +1,6 @@
+C:\git\binary_editor\RefProject\EdsTextBoxBase\bin\Debug\EdsTextBoxBase.exe
+C:\git\binary_editor\RefProject\EdsTextBoxBase\bin\Debug\EdsTextBoxBase.pdb
+C:\git\binary_editor\RefProject\EdsTextBoxBase\obj\Debug\EdsTextBoxBase.csproj.AssemblyReference.cache
+C:\git\binary_editor\RefProject\EdsTextBoxBase\obj\Debug\EdsTextBoxBase.csproj.CoreCompileInputs.cache
+C:\git\binary_editor\RefProject\EdsTextBoxBase\obj\Debug\EdsTextBoxBase.exe
+C:\git\binary_editor\RefProject\EdsTextBoxBase\obj\Debug\EdsTextBoxBase.pdb

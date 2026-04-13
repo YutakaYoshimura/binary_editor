@@ -4,7 +4,25 @@
       "Bash(mkdir -p /c/git/binary_editor/Develop/EdsHexBoxBase)",
       "Bash(mkdir -p /c/git/binary_editor/Develop/EdsStandardBase)",
       "Bash(cp -r /c/git/binary_editor/BaseProject/. /c/git/binary_editor/RefProject/)",
-      "Read(//c/git/binary_editor/RefProject/**)"
+      "Read(//c/git/binary_editor/RefProject/**)",
+      "Bash(msbuild HexEditorStandard/HexEditorStandard.csproj /t:Build /p:Configuration=Debug /nologo)",
+      "Bash(msbuild HexEditorVerification/HexEditorVerification.csproj /t:Build /p:Configuration=Debug /nologo)",
+      "Read(//c/Program Files/Microsoft Visual Studio/2022/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/2019/**)",
+      "Bash('/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/msbuild.exe' /c/git/binary_editor/Develop/HexEditorStandard/HexEditorStandard.csproj /t:Build /p:Configuration=Debug /nologo)",
+      "Bash('/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/msbuild.exe' /c/git/binary_editor/Develop/HexEditorVerification/HexEditorVerification.csproj /t:Build /p:Configuration=Debug /nologo)",
+      "Bash(cmd.exe /c '\"C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/msbuild.exe\" \"C:\\\\git\\\\binary_editor\\\\Develop\\\\HexEditorStandard\\\\HexEditorStandard.csproj\" /t:Build /p:Configuration=Debug /nologo 2>&1')",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\msbuild.exe' 'C:\\\\git\\\\binary_editor\\\\Develop\\\\HexEditorStandard\\\\HexEditorStandard.csproj' /t:Build /p:Configuration=Debug /nologo 2>&1 | Select-String -Pattern 'error|warning CS|Build succeeded|FAILED'\")",
+      "Bash(powershell.exe:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(dir:*)",
+      "Bash(where msbuild:*)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"C:\\\\git\\\\binary_editor\\\\RefProject\\\\EdsHexBoxBase\\\\EdsHexBoxBase.csproj\" /p:Configuration=Debug /v:minimal)",
+      "Bash(cmd //c '\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\MSBuild.exe\" \"C:\\\\git\\\\binary_editor\\\\RefProject\\\\EdsHexBoxBase\\\\EdsHexBoxBase.csproj\" /p:Configuration=Debug /v:minimal')",
+      "Bash(powershell:*)",
+      "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"C:/git/binary_editor/RefProject/EdsHexBoxBase/EdsHexBoxBase.csproj\" -t:Build -p:Configuration=Debug -nologo -v:minimal)",
+      "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" \"C:/git/binary_editor/RefProject/EdsStandardBase/EdsStandardBase.csproj\" -t:Build -p:Configuration=Debug -nologo -v:minimal)"
     ]
   }
 }

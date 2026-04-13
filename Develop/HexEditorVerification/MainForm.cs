@@ -146,18 +146,19 @@ namespace HexEditorVerification
 
             _hexBox = new HexBox
             {
-                Dock                = DockStyle.Fill,
-                Font                = new Font("Consolas", 10.5f),
-                BackColor           = Color.White,
-                LineInfoVisible     = true,
-                StringViewVisible   = true,
-                VScrollBarVisible   = true,
-                ColumnInfoVisible   = true,
-                BytesPerLine        = 16,
+                Dock                 = DockStyle.Fill,
+                Font                 = new Font("Consolas", 10.5f),
+                BackColor            = Color.White,
+                LineInfoVisible      = true,
+                StringViewVisible    = true,
+                VScrollBarVisible    = true,
+                ColumnInfoVisible    = true,
+                BytesPerLine         = 16,
                 UseFixedBytesPerLine = true,
-                SelectionBackColor  = Color.FromArgb(150, 190, 240),
-                SelectionForeColor  = Color.Black,
-                InfoForeColor       = Color.SlateGray
+                SelectionBackColor   = Color.FromArgb(150, 190, 240),
+                SelectionForeColor   = Color.Black,
+                InfoForeColor        = Color.SlateGray,
+                ReadOnly             = false,   // 編集可能
             };
 
             tab.Controls.Add(_hexBox);
