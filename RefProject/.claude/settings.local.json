@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /c/git/binary_editor/Develop/EdsHexBoxBase)",
+      "Bash(mkdir -p /c/git/binary_editor/Develop/EdsStandardBase)",
+      "Bash(cp -r /c/git/binary_editor/BaseProject/. /c/git/binary_editor/RefProject/)",
+      "Read(//c/git/binary_editor/RefProject/**)"
+    ]
+  }
+}
