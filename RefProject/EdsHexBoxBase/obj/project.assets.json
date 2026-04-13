@@ -22,28 +22,6 @@
           "lib/net40/Be.Windows.Forms.HexBox.dll": {}
         }
       }
-    },
-    ".NETFramework,Version=v4.8/win-x64": {
-      "Be.Windows.Forms.HexBox/1.6.1": {
-        "type": "package",
-        "compile": {
-          "lib/net40/Be.Windows.Forms.HexBox.dll": {}
-        },
-        "runtime": {
-          "lib/net40/Be.Windows.Forms.HexBox.dll": {}
-        }
-      }
-    },
-    ".NETFramework,Version=v4.8/win-x86": {
-      "Be.Windows.Forms.HexBox/1.6.1": {
-        "type": "package",
-        "compile": {
-          "lib/net40/Be.Windows.Forms.HexBox.dll": {}
-        },
-        "runtime": {
-          "lib/net40/Be.Windows.Forms.HexBox.dll": {}
-        }
-      }
     }
   },
   "libraries": {
@@ -114,12 +92,6 @@
     },
     "runtimes": {
       "win": {
-        "#import": []
-      },
-      "win-x64": {
-        "#import": []
-      },
-      "win-x86": {
         "#import": []
       }
     }

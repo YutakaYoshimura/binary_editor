@@ -5,3 +5,10 @@ C:\git\binary_editor\BaseProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.csproj.Co
 C:\git\binary_editor\BaseProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.csproj.CopyComplete
 C:\git\binary_editor\BaseProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.exe
 C:\git\binary_editor\BaseProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.pdb
+C:\git\binary_editor\RefProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.csproj.CoreCompileInputs.cache
+C:\git\binary_editor\RefProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.exe
+C:\git\binary_editor\RefProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.pdb
+C:\git\binary_editor\RefProject\EdsHexBoxBase\bin\Debug\EdsHexBoxBase.exe
+C:\git\binary_editor\RefProject\EdsHexBoxBase\bin\Debug\EdsHexBoxBase.pdb
+C:\git\binary_editor\RefProject\EdsHexBoxBase\bin\Debug\Be.Windows.Forms.HexBox.dll
+C:\git\binary_editor\RefProject\EdsHexBoxBase\obj\Debug\EdsHexBoxBase.csproj.CopyComplete
