@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\git\\binary_editor\\BaseProject\\EdsHexBoxBase\\EdsHexBoxBase.csproj": {}
+  },
+  "projects": {
+    "C:\\git\\binary_editor\\BaseProject\\EdsHexBoxBase\\EdsHexBoxBase.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\git\\binary_editor\\BaseProject\\EdsHexBoxBase\\EdsHexBoxBase.csproj",
+        "projectName": "EdsHexBoxBase",
+        "projectPath": "C:\\git\\binary_editor\\BaseProject\\EdsHexBoxBase\\EdsHexBoxBase.csproj",
+        "packagesPath": "C:\\Users\\yutak\\.nuget\\packages\\",
+        "outputPath": "C:\\git\\binary_editor\\BaseProject\\EdsHexBoxBase\\obj\\",
+        "projectStyle": "PackageReference",
+        "skipContentFileWrite": true,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\yutak\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net48"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net48": {
+            "projectReferences": {}
+          }
+        }
+      },
+      "frameworks": {
+        "net48": {
+          "dependencies": {
+            "Be.Windows.Forms.HexBox": {
+              "target": "Package",
+              "version": "[1.6.1, )"
+            }
+          }
+        }
+      },
+      "runtimes": {
+        "win": {
+          "#import": []
+        },
+        "win-x64": {
+          "#import": []
+        },
+        "win-x86": {
+          "#import": []
+        }
+      }
+    }
+  }
+}

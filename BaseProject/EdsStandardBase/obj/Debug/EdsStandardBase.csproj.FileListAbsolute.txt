@@ -1,0 +1,5 @@
+C:\git\binary_editor\BaseProject\EdsStandardBase\bin\Debug\EdsStandardBase.exe
+C:\git\binary_editor\BaseProject\EdsStandardBase\bin\Debug\EdsStandardBase.pdb
+C:\git\binary_editor\BaseProject\EdsStandardBase\obj\Debug\EdsStandardBase.csproj.CoreCompileInputs.cache
+C:\git\binary_editor\BaseProject\EdsStandardBase\obj\Debug\EdsStandardBase.exe
+C:\git\binary_editor\BaseProject\EdsStandardBase\obj\Debug\EdsStandardBase.pdb
