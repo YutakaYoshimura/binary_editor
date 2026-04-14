@@ -12,36 +12,16 @@ namespace EdsStandardBase
         private byte[]               _data = SampleData.Create();
         private DataGridView         _hexGrid;
         private DataGridView         _paramGrid;
-        private ByteOverlayGrid      _byteOverlayDgv;
         private TabControl           _tabs;
         private ToolStripStatusLabel _statusLabel;
 
         private int _hexGridNibbleCount = 0;
-        private int _overlayNibbleCount = 0;
-        private int _overlayParamIdx    = -1;
 
         // Tab② 列インデックス
         private const int COL_NAME     = 0;
         private const int COL_OFFSET   = 1;
         private const int COL_SIZEINFO = 2;
         private const int COL_RAWBYTES = 3;
-
-        // ─── 内部クラス: Ctrl+V をフォームへ転送する DataGridView ─
-        private class ByteOverlayGrid : DataGridView
-        {
-            public event EventHandler<string> PasteRequest;
-
-            protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
-            {
-                if (keyData == (Keys.Control | Keys.V))
-                {
-                    var h = PasteRequest;
-                    if (h != null) h(this, Clipboard.GetText());
-                    return true;
-                }
-                return base.ProcessCmdKey(ref msg, keyData);
-            }
-        }
 
         // ─── エントリポイント ─────────────────────────────────────
         [STAThread]
@@ -522,23 +502,19 @@ namespace EdsStandardBase
             };
             toolbar.Controls.Add(new Label
             {
-                Text = "【パターン[2]】 バイト列セル（✎）をクリックすると DataGridView オーバーレイで編集できます。\n" +
-                       "各バイトに Hex 入力 → 下位ニブル確定で次のセルへ自動移動。",
+                Text = "【パターン[2]】 バイト列セル（✎）をクリックすると per-byte TextBox エディタで直接編集できます。\n" +
+                       "各バイトに Hex 入力 → 下位ニブル確定で次のセルへ自動移動。8 バイト超は 2 段表示。",
                 Dock      = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 ForeColor = Color.FromArgb(30, 80, 40),
                 Font      = new Font("Meiryo UI", 8.5f),
             });
 
-            _paramGrid      = BuildParamDataGridView();
-            _byteOverlayDgv = BuildByteOverlayGrid();
-
+            _paramGrid = BuildParamDataGridView();
             PopulateParamGrid();
 
-            // 追加順: paramGrid → overlay (overlay を後から追加して BringToFront で最前面へ)
             tab.Controls.Add(_paramGrid);
             tab.Controls.Add(toolbar);
-            tab.Controls.Add(_byteOverlayDgv);
             return tab;
         }
 
@@ -550,15 +526,15 @@ namespace EdsStandardBase
                 AutoSizeColumnsMode       = DataGridViewAutoSizeColumnsMode.Fill,
                 AllowUserToAddRows        = false,
                 AllowUserToDeleteRows     = false,
+                AllowUserToResizeRows     = false,
                 RowHeadersVisible         = false,
                 SelectionMode             = DataGridViewSelectionMode.CellSelect,
                 BackgroundColor           = Color.White,
                 GridColor                 = Color.LightSteelBlue,
                 BorderStyle               = BorderStyle.None,
                 Font                      = new Font("Meiryo UI", 9.5f),
-                RowTemplate               = { Height = 26 },
                 EnableHeadersVisualStyles = false,
-                ReadOnly                  = true,
+                EditMode                  = DataGridViewEditMode.EditOnEnter,
             };
             gv.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(50, 85, 145);
             gv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
@@ -567,28 +543,27 @@ namespace EdsStandardBase
 
             gv.Columns.Add(new DataGridViewTextBoxColumn
             {
-                Name = "Name", HeaderText = "パラメータ名", FillWeight = 18,
+                Name = "Name", HeaderText = "パラメータ名", FillWeight = 18, ReadOnly = true,
             });
             gv.Columns.Add(new DataGridViewTextBoxColumn
             {
-                Name = "Offset", HeaderText = "オフセット", FillWeight = 10,
+                Name = "Offset", HeaderText = "オフセット", FillWeight = 10, ReadOnly = true,
                 DefaultCellStyle = { Alignment = DataGridViewContentAlignment.MiddleCenter },
             });
             gv.Columns.Add(new DataGridViewTextBoxColumn
             {
-                Name = "SizeInfo", HeaderText = "サイズ / データ型", FillWeight = 16,
+                Name = "SizeInfo", HeaderText = "サイズ / データ型", FillWeight = 16, ReadOnly = true,
             });
-            gv.Columns.Add(new DataGridViewTextBoxColumn
+
+            var bytesCol = new DataGridViewBytesColumn
             {
                 Name       = "RawBytes",
                 HeaderText = "バイト列 ✎",
                 FillWeight = 56,
-                DefaultCellStyle =
-                {
-                    Font      = new Font("Consolas", 9.5f),
-                    BackColor = Color.FromArgb(255, 255, 210),
-                }
-            });
+            };
+            bytesCol.DefaultCellStyle.Font      = new Font("Consolas", 9f);
+            bytesCol.DefaultCellStyle.BackColor = Color.FromArgb(255, 255, 210);
+            gv.Columns.Add(bytesCol);
 
             gv.CellFormatting += (s, e) =>
             {
@@ -600,7 +575,29 @@ namespace EdsStandardBase
                 }
             };
 
-            gv.CellClick += ParamGrid_CellClick;
+            // 編集不可セルへの侵入を防ぐ
+            gv.CellBeginEdit += (s, e) =>
+            {
+                if (e.ColumnIndex != COL_RAWBYTES) { e.Cancel = true; return; }
+                if (e.RowIndex >= 0 && e.RowIndex < SampleData.Parameters.Length
+                    && SampleData.Parameters[e.RowIndex].IsReadOnly)
+                    e.Cancel = true;
+            };
+
+            // 編集確定 → _data に反映
+            gv.CellValueChanged += (s, e) =>
+            {
+                if (e.ColumnIndex != COL_RAWBYTES || e.RowIndex < 0) return;
+                if (e.RowIndex >= SampleData.Parameters.Length) return;
+
+                ParameterDef p        = SampleData.Parameters[e.RowIndex];
+                byte[]       newBytes = gv.Rows[e.RowIndex].Cells[COL_RAWBYTES].Value as byte[];
+                if (newBytes == null || newBytes.Length != p.Size) return;
+
+                Array.Copy(newBytes, 0, _data, p.Offset, p.Size);
+                PopulateHexGrid();
+                _statusLabel.Text = string.Format("{0} を更新しました", p.Name);
+            };
 
             return gv;
         }
@@ -610,296 +607,24 @@ namespace EdsStandardBase
             _paramGrid.Rows.Clear();
             foreach (ParameterDef p in SampleData.Parameters)
             {
-                _paramGrid.Rows.Add(
+                byte[] paramBytes = new byte[p.Size];
+                Array.Copy(_data, p.Offset, paramBytes, 0, p.Size);
+
+                int rowIdx = _paramGrid.Rows.Add(
                     p.Name,
                     string.Format("0x{0:X4}", p.Offset),
                     string.Format("{0} byte   {1}", p.Size, p.TypeLabel),
-                    p.ReadRawBytes(_data));
+                    paramBytes);
+
+                // 8 バイト超は 2 段表示のため行高さを大きくする
+                _paramGrid.Rows[rowIdx].Height =
+                    (p.Size > DataGridViewBytesEditingControl.BYTES_PER_ROW)
+                    ? DataGridViewBytesEditingControl.DOUBLE_ROW_HEIGHT
+                    : DataGridViewBytesEditingControl.SINGLE_ROW_HEIGHT;
+
+                // 読み取り専用パラメータのバイト列セルは編集禁止
+                _paramGrid.Rows[rowIdx].Cells[COL_RAWBYTES].ReadOnly = p.IsReadOnly;
             }
-        }
-
-        private void ParamGrid_CellClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0 || e.ColumnIndex != COL_RAWBYTES) return;
-            if (e.RowIndex >= SampleData.Parameters.Length) return;
-            if (SampleData.Parameters[e.RowIndex].IsReadOnly) return;
-            ShowByteOverlay(e.RowIndex);
-        }
-
-        // ────────────────────────────────────────────────────────
-        //  バイトオーバーレイ (Tab②)
-        // ────────────────────────────────────────────────────────
-
-        private ByteOverlayGrid BuildByteOverlayGrid()
-        {
-            var gv = new ByteOverlayGrid
-            {
-                Visible                     = false,
-                AllowUserToAddRows          = false,
-                AllowUserToDeleteRows       = false,
-                RowHeadersVisible           = false,
-                ColumnHeadersVisible        = false,   // ヘッダ不要
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
-                SelectionMode               = DataGridViewSelectionMode.CellSelect,
-                BackgroundColor             = Color.FromArgb(255, 255, 200),
-                GridColor                   = Color.FromArgb(180, 160, 80),
-                BorderStyle                 = BorderStyle.FixedSingle,
-                Font                        = new Font("Consolas", 9.5f),
-                MultiSelect                 = false,
-                ScrollBars                  = ScrollBars.None,
-                EnableHeadersVisualStyles   = false,
-                AutoSizeColumnsMode         = DataGridViewAutoSizeColumnsMode.None,
-            };
-            gv.RowTemplate.Height = 24;
-
-            gv.CellBeginEdit         += (s, e) => { _overlayNibbleCount = 0; };
-            gv.EditingControlShowing += ByteOverlay_EditingControlShowing;
-            gv.CellEndEdit           += ByteOverlay_CellEndEdit;
-            gv.PasteRequest          += ByteOverlay_PasteRequest;
-
-            gv.Leave += (s, e2) =>
-            {
-                gv.BeginInvoke(new Action(() =>
-                {
-                    if (!gv.ContainsFocus) CommitByteOverlay();
-                }));
-            };
-
-            return gv;
-        }
-
-        private void ShowByteOverlay(int paramIdx)
-        {
-            if (_overlayParamIdx >= 0) CommitByteOverlay();
-
-            _overlayParamIdx = paramIdx;
-            ParameterDef p = SampleData.Parameters[paramIdx];
-
-            _byteOverlayDgv.Columns.Clear();
-            _byteOverlayDgv.Rows.Clear();
-
-            for (int i = 0; i < p.Size; i++)
-            {
-                _byteOverlayDgv.Columns.Add(new DataGridViewTextBoxColumn
-                {
-                    HeaderText = i.ToString("X2"),
-                    Width      = 34,
-                    SortMode   = DataGridViewColumnSortMode.NotSortable,
-                    Resizable  = DataGridViewTriState.False,
-                    DefaultCellStyle =
-                    {
-                        Alignment = DataGridViewContentAlignment.MiddleCenter,
-                        Font      = new Font("Consolas", 9.5f),
-                        BackColor = Color.FromArgb(255, 255, 200),
-                    }
-                });
-            }
-
-            object[] cells = new object[p.Size];
-            for (int i = 0; i < p.Size; i++)
-                cells[i] = _data[p.Offset + i].ToString("X2");
-            _byteOverlayDgv.Rows.Add(cells);
-
-            // セル座標 → スクリーン → タブページ座標
-            Rectangle cellRect = _paramGrid.GetCellDisplayRectangle(COL_RAWBYTES, paramIdx, false);
-            Point     screenPt = _paramGrid.PointToScreen(cellRect.Location);
-            TabPage   tabPage  = _paramGrid.Parent as TabPage;
-            if (tabPage == null) return;
-            Point parentPt = tabPage.PointToClient(screenPt);
-
-            int overlayW = Math.Max(p.Size * 34 + 4, cellRect.Width);
-            int overlayH = _byteOverlayDgv.RowTemplate.Height + 4;
-
-            _byteOverlayDgv.SetBounds(parentPt.X, parentPt.Y, overlayW, overlayH);
-            _byteOverlayDgv.Visible = true;
-            _byteOverlayDgv.BringToFront();
-
-            _byteOverlayDgv.CurrentCell = _byteOverlayDgv.Rows[0].Cells[0];
-            _byteOverlayDgv.BeginEdit(true);
-            _overlayNibbleCount = 0;
-        }
-
-        private void CommitByteOverlay()
-        {
-            if (_overlayParamIdx < 0) return;
-            ParameterDef p = SampleData.Parameters[_overlayParamIdx];
-
-            _byteOverlayDgv.EndEdit();
-
-            for (int i = 0; i < p.Size && i < _byteOverlayDgv.Columns.Count; i++)
-            {
-                object val  = _byteOverlayDgv.Rows[0].Cells[i].Value;
-                string text = val != null ? val.ToString().Trim().ToUpper() : "";
-                byte b;
-                if (text.Length == 2 && byte.TryParse(text,
-                    System.Globalization.NumberStyles.HexNumber,
-                    System.Globalization.CultureInfo.InvariantCulture, out b))
-                {
-                    _data[p.Offset + i] = b;
-                }
-            }
-
-            HideByteOverlay();
-            PopulateHexGrid();
-            PopulateParamGrid();
-        }
-
-        private void HideByteOverlay()
-        {
-            _overlayParamIdx = -1;
-            _byteOverlayDgv.Visible = false;
-        }
-
-        private void ByteOverlay_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
-        {
-            TextBox tb = e.Control as TextBox;
-            if (tb == null) return;
-
-            tb.MaxLength       = 2;
-            tb.CharacterCasing = CharacterCasing.Upper;
-            tb.KeyDown  -= OverlayTB_KeyDown;
-            tb.KeyPress -= OverlayTB_KeyPress;
-            tb.KeyDown  += OverlayTB_KeyDown;
-            tb.KeyPress += OverlayTB_KeyPress;
-
-            _overlayNibbleCount = 0;
-            _byteOverlayDgv.BeginInvoke(new Action(() =>
-            {
-                TextBox t = _byteOverlayDgv.EditingControl as TextBox;
-                if (t != null) t.SelectAll();
-            }));
-        }
-
-        private void OverlayTB_KeyDown(object sender, KeyEventArgs e)
-        {
-            var tb = (TextBox)sender;
-            if (_byteOverlayDgv.CurrentCell == null) return;
-            int col = _byteOverlayDgv.CurrentCell.ColumnIndex;
-
-            if (e.KeyCode == Keys.Back)
-            {
-                e.SuppressKeyPress = true;
-                tb.Text = "00";
-                _overlayNibbleCount = 0;
-                int cc = col;
-                _byteOverlayDgv.BeginInvoke(new Action(() =>
-                {
-                    _byteOverlayDgv.EndEdit();
-                    int prevCol = cc - 1;
-                    if (prevCol >= 0 && _byteOverlayDgv.Rows.Count > 0)
-                    {
-                        _byteOverlayDgv.CurrentCell = _byteOverlayDgv.Rows[0].Cells[prevCol];
-                        _byteOverlayDgv.BeginEdit(true);
-                        _overlayNibbleCount = 0;
-                    }
-                }));
-            }
-            else if (e.KeyCode == Keys.Delete)
-            {
-                e.SuppressKeyPress = true;
-                tb.Text = "00";
-                _overlayNibbleCount = 0;
-                _byteOverlayDgv.BeginInvoke(new Action(() => _byteOverlayDgv.EndEdit()));
-            }
-            else if (e.KeyCode == Keys.Escape)
-            {
-                e.SuppressKeyPress = true;
-                _byteOverlayDgv.BeginInvoke(new Action(() => HideByteOverlay()));
-            }
-        }
-
-        private void OverlayTB_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            if (e.KeyChar == '\x16') { e.Handled = true; return; } // Ctrl+V → ByteOverlayGrid で処理
-            if (char.IsControl(e.KeyChar)) return;
-
-            char c = char.ToUpper(e.KeyChar);
-            if (!IsHexChar(c)) { e.Handled = true; return; }
-
-            _overlayNibbleCount++;
-            if (_overlayNibbleCount >= 2)
-            {
-                _overlayNibbleCount = 0;
-                int col = _byteOverlayDgv.CurrentCell != null ? _byteOverlayDgv.CurrentCell.ColumnIndex : -1;
-                _byteOverlayDgv.BeginInvoke(new Action(() =>
-                {
-                    _byteOverlayDgv.EndEdit();
-                    OverlayMoveToNextCell(col);
-                }));
-            }
-        }
-
-        private void OverlayMoveToNextCell(int col)
-        {
-            int next = col + 1;
-            if (next >= _byteOverlayDgv.Columns.Count) { CommitByteOverlay(); return; }
-            if (_byteOverlayDgv.Rows.Count == 0) return;
-            _byteOverlayDgv.CurrentCell = _byteOverlayDgv.Rows[0].Cells[next];
-            _byteOverlayDgv.BeginEdit(true);
-            _overlayNibbleCount = 0;
-        }
-
-        private void ByteOverlay_CellEndEdit(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex != 0 || _overlayParamIdx < 0) return;
-            int col = e.ColumnIndex;
-            ParameterDef p = SampleData.Parameters[_overlayParamIdx];
-            if (col >= p.Size) return;
-
-            object val  = _byteOverlayDgv.Rows[0].Cells[col].Value;
-            string text = val != null ? val.ToString().Trim().ToUpper() : "";
-            byte b;
-            if (!(text.Length == 2 && byte.TryParse(text,
-                System.Globalization.NumberStyles.HexNumber,
-                System.Globalization.CultureInfo.InvariantCulture, out b)))
-            {
-                // 無効入力は _data の現在値に戻す
-                _byteOverlayDgv.Rows[0].Cells[col].Value = _data[p.Offset + col].ToString("X2");
-            }
-        }
-
-        private void ByteOverlay_PasteRequest(object sender, string text)
-        {
-            if (_overlayParamIdx < 0) return;
-            ParameterDef p = SampleData.Parameters[_overlayParamIdx];
-
-            string hex = text.Replace(" ", "").Replace("-", "").Trim().ToUpper();
-            if (hex.Length < 2)
-            {
-                MessageBox.Show(
-                    "クリップボードのテキストに無効な文字が含まれています。\n16 進数の文字（0-9, A-F）のみ使用できます。",
-                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // カーソル（パーキング）位置から貼り付け開始
-            int startCol   = _byteOverlayDgv.CurrentCell != null ? _byteOverlayDgv.CurrentCell.ColumnIndex : 0;
-            int byteCount  = hex.Length / 2;
-            int writeCount = Math.Min(byteCount, p.Size - startCol);
-
-            byte[] bytes = new byte[writeCount];
-            bool   valid = true;
-            for (int i = 0; i < writeCount; i++)
-            {
-                if (!byte.TryParse(hex.Substring(i * 2, 2),
-                    System.Globalization.NumberStyles.HexNumber,
-                    System.Globalization.CultureInfo.InvariantCulture, out bytes[i]))
-                { valid = false; break; }
-            }
-
-            if (!valid)
-            {
-                MessageBox.Show(
-                    "クリップボードのテキストに無効な文字が含まれています。\n16 進数の文字（0-9, A-F）のみ使用できます。",
-                    "貼り付けエラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            _byteOverlayDgv.EndEdit();
-            for (int i = 0; i < writeCount; i++)
-                _byteOverlayDgv.Rows[0].Cells[startCol + i].Value = bytes[i].ToString("X2");
-            // writeCount 分だけ上書き。残りのセルは既存値のまま CommitByteOverlay に渡す
-            CommitByteOverlay();
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -939,7 +664,6 @@ namespace EdsStandardBase
 
         private void RefreshAll()
         {
-            HideByteOverlay();
             PopulateHexGrid();
             PopulateParamGrid();
         }
