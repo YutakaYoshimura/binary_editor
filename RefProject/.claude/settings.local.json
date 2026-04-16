@@ -4,7 +4,27 @@
       "Bash(mkdir -p /c/git/binary_editor/Develop/EdsHexBoxBase)",
       "Bash(mkdir -p /c/git/binary_editor/Develop/EdsStandardBase)",
       "Bash(cp -r /c/git/binary_editor/BaseProject/. /c/git/binary_editor/RefProject/)",
-      "Read(//c/git/binary_editor/RefProject/**)"
+      "Read(//c/git/binary_editor/RefProject/**)",
+      "Bash(MSBuild.exe EdsStandardBase.csproj /p:Configuration=Debug /nologo /v:minimal)",
+      "Bash(/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell.exe -Command \"& 'C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Current\\\\Bin\\\\amd64\\\\MSBuild.exe' 'C:\\\\git\\\\binary_editor\\\\RefProject\\\\EdsStandardBase\\\\EdsStandardBase.csproj' /p:Configuration=Debug /t:Rebuild 2>&1\")",
+      "Bash(python -c \"import openpyxl; print\\('openpyxl OK'\\)\")",
+      "Bash(python3 -c \"import openpyxl; print\\('openpyxl OK'\\)\")",
+      "Bash(where python3 *)",
+      "Bash(where python *)",
+      "Bash(where py *)",
+      "Bash(py *)",
+      "Bash(dotnet --version)",
+      "Bash(node -e \"require\\('exceljs'\\)\")",
+      "Bash(npm install *)",
+      "Bash(node *)",
+      "Bash(git *)",
+      "Bash(python3 *)",
+      "Bash(python *)",
+      "Bash(/c/Users/yutak/AppData/Local/Microsoft/WindowsApps/python.exe *)",
+      "Bash(powershell.exe -Command \"python --version\")",
+      "Bash(powershell.exe *)"
     ]
   }
 }
